@@ -1164,21 +1164,43 @@ jobs:
           METABASE_URL     = "https://metabase-lighthouse.solarsquare.in"
           USERNAME         = "sanket.mhatre@solarsquare.in"
           PASSWORD         = "fUNp01NKbJtA4r"
-          OMS_CARD_ID      = 2154
-          DN_CARD_ID       = 2106
+          OMS_CARD_ID      = 4506
+          DN_CARD_ID       = 1589
           ERP_B64          = os.environ.get("ERP_B64", "")
 
           OMS_COLS = {
-              "SSE ID":"SSE ID","Installation Completion Date":"Installation Completion Date",
-              "Cell Name":"Cell Name","City":"City","State":"State",
-              "Project Size (kW)":"Project Size (kW)","Offer Type":"Offer Type",
-              "Phase Connection":"Phase Connection","Final Revenue":"Final Revenue",
-              "Final Revenue Excl. GST":"Final Revenue Excl. GST",
+              "SSE ID":"SSE ID","Booking Type":"Booking Type","Tagg 2":"Tagg 2",
+              "Booking Date":"Booking Date","Booking Month":"Booking Month","Booking Year":"Booking Year",
+              "Installation Completion Date":"Installation Completion Date","Month":"Month",
+              "Installation Month No":"Installation Month No","Year of":"Year of",
+              "Financial Quarter":"Financial Quarter","Customer Name":"Customer Name",
+              "City":"City","State":"State","Project Size (kW)":"Project Size (kW)",
+              "Size Bucket":"Size Bucket","Offer Type":"Offer Type","Phase Connection":"Phase Connection",
+              "Finance Mode / Payment Schedule":"Finance Mode / Payment Schedule",
+              "Final Output":"Final Output","Metering (Config Driven)":"Metering (Config Driven)",
+              "BOM Details Type 1":"BOM Details Type 1","BOM Details Type 2":"BOM Details Type 2",
+              "BOM Details Type 3":"BOM Details Type 3","BOM Details Type 4":"BOM Details Type 4",
           }
 
-          DN_COLS = {'customer': 'DN_SSE_ID', 'posting_date': 'posting_date', 'parent': 'parent', 'item_code': 'item_code', 'item_name': 'item_name', 'item_category': 'item_category', 'item_subcategory': 'item_subcategory', 'set_warehouse': 'set_warehouse', 'warehouse': 'warehouse', 'qty': 'qty', 'uohm': 'uom', 'rate': 'rate', 'amount': 'amount', 'Vehicle No': 'Vehicle No', 'Reason for Second Delivery': 'Reason for Second Delivery', 'Text Remarks for Second Dispatch': 'Text Remarks for Second Dispatch', 'Delivery Note Status': 'Delivery Note Status'}
+          DN_COLS = {
+              'customer': 'DN_SSE_ID', 'parent_id': 'parent_id', 'posting_date': 'posting_date',
+              'item_category': 'item_category', 'item_subcategory': 'item_subcategory',
+              'item_code': 'item_code', 'item_name': 'item_name', 'qty': 'qty',
+              'uohm': 'uom', 'rate': 'rate', 'amount': 'amount',
+              'Delivery Note Status': 'Delivery Note Status', 'docstatus': 'docstatus',
+          }
 
-          FINAL_HEADERS = ['SSE ID', 'Installation Completion Date', 'Cell Name', 'City', 'State', 'Project Size (kW)', 'Offer Type', 'Phase Connection', 'Final Revenue', 'Final Revenue Excl. GST', 'posting_date', 'item_code', 'item_name', 'item_category', 'item_subcategory', 'set_warehouse', 'warehouse', 'qty', 'uom', 'rate', 'amount', 'parent', 'Delivery Note Status', 'Vehicle No', 'Reason for Second Delivery', 'Text Remarks for Second Dispatch']
+          FINAL_HEADERS = [
+              'SSE ID', 'Booking Type', 'Tagg 2', 'Booking Date', 'Booking Month', 'Booking Year',
+              'Installation Completion Date', 'Month', 'Installation Month No', 'Year of',
+              'Financial Quarter', 'Customer Name', 'City', 'State', 'Project Size (kW)',
+              'Size Bucket', 'Offer Type', 'Phase Connection', 'Finance Mode / Payment Schedule',
+              'Final Output', 'Metering (Config Driven)', 'BOM Details Type 1', 'BOM Details Type 2',
+              'BOM Details Type 3', 'BOM Details Type 4',
+              'parent_id', 'posting_date', 'item_category', 'item_subcategory',
+              'item_code', 'item_name', 'qty', 'uom', 'rate', 'amount',
+              'Delivery Note Status', 'docstatus',
+          ]
 
           def make_http():
               s = requests.Session()
@@ -1255,7 +1277,7 @@ jobs:
           if dn_rows:
               s = dn_rows[0]
               print("DN first row (enriched):")
-              for k in ["DN_SSE_ID","item_code","item_name","item_category","item_subcategory","qty","rate","amount","warehouse"]:
+              for k in ["DN_SSE_ID","parent_id","item_code","item_name","item_category","item_subcategory","qty","rate","amount","Delivery Note Status","docstatus"]:
                   print(f"  {k}: {str(s.get(k,'<missing>'))[:70]!r}")
 
           valid_ids = {r["SSE ID"].upper() for r in oms_rows if r["SSE ID"].strip()}
