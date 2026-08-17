@@ -1162,10 +1162,10 @@ jobs:
           from urllib3.util.retry import Retry
 
           METABASE_URL     = "https://metabase-lighthouse.solarsquare.in"
-          USERNAME         = "devika.g@solarsquare.in"
-          PASSWORD         = "Metabasedevika123"
-          OMS_CARD_ID      = 2154
-          DN_CARD_ID       = 2106
+          USERNAME         = "sanket.mhatre@solarsquare.in"
+          PASSWORD         = "fUNp01NKbJtA4r"
+          OMS_CARD_ID      = 4506
+          DN_CARD_ID       = 1589
           ERP_B64          = os.environ.get("ERP_B64", "")
 
           OMS_COLS = {
