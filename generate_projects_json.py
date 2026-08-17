@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 generate_projects_json.py
-Run by GitHub Action after sync_data.yml to produce projects.json.gz
+Run by GitHub Action after sync_data.yml to produce projects.json.gz.
 Pre-aggregates 825K DN dump rows → ~32K project-level rows (~1.2 MB gz vs 14.7 MB)
 
 Metering is calculated per-project using the backend rate table formula:
@@ -22,12 +22,6 @@ from collections import defaultdict
 from datetime import datetime
 
 # ── Cohort assignment (QCD-based) ────────────────────────────────────────────
-# Cohorts are assigned by QCD (Quote Completion Date), NOT installation date.
-# QCD is loaded from booking_dump.csv (exported from OMS import sheet).
-# Pricing cohort definitions come from pricing cohorts.xlsx.
-# GZ offers: 'GoodZero', 'GoodZero Pro', 'GoodZero Uno', 'GoodZero+'
-# Non-GZ offers: 'Regular', 'regular', 'SSE Blue', '' (blank), etc.
-
 GZ_OFFERS_SET = {'GoodZero', 'GoodZero Pro', 'GoodZero Uno', 'GoodZero+'}
 
 # ── Configuration ────────────────────────────────────────────────────────────
@@ -35,25 +29,15 @@ CIVL_TO_ELEC   = {'CIVL-0012','CIVL-0013','CIVL-0014','CIVL-0015','CIVL-0016'}
 METERING_REMAP = {'ACDB-2449-EATON'}
 DONGLE_PFX     = {'DALO','DALA'}
 
-# Categories that count towards COGS
 COGS_CATS = {
     'Module','Inverter','Prefab MMS','Cables','I&C KIT','Conduit Pipe',
     'Earthing & LA','Junction Box','Tin Shed MMS','Safety','I&C Accessories',
     'Welded MMS','SS NBW','Electrical BoS','Data Logger','Metering','Welcome Kit and Board','Ladder'
 }
 
-# Categories explicitly EXCLUDED from COGS (even if present in DN data)
 EXCLUDE_CATS = {'Safety Lifeline', 'Civil Work', 'Civil work'}
 
-# ── Backend Metering Rate Tables ─────────────────────────────────────────────
-# Formula: metering = NM(city, inv_phase) + GM(city, sanction_phase) + DN_dump_extras
-# NM = Net Meter rate (keyed on Inverter Phase — detected from DN inverter item name)
-# GM = Generation Meter rate (keyed on Sanction Phase = Phase Connection from data.csv)
-# Tuple format: (single_phase, three_phase)
-# Source: Backend rate matrix (GMB_GMP_GMI ERP Categorization)
-
 NM_RATES = {
-    # MH clusters — Net Meter included in discom, rate = 0
     'Pune':        (0, 0),
     'Nashik':      (0, 0),
     'Nagpur':      (0, 0),
@@ -65,23 +49,18 @@ NM_RATES = {
     'Mumbai':      (0, 0),
     'Amravati':    (0, 0),
     'Solapur':     (0, 0),
-    # MP clusters
     'Bhopal':      (2841, 4617),
     'Indore':      (6800, 9050),
     'Jabalpur':    (9785, 14050),
     'Gwalior':     (2841, 4617),
-    # South
     'Bengaluru':   (3250, 6376),
     'Hyderabad':   (0, 0),
-    # Gujarat
     'Ahmedabad':   (0, 0),
     'Surat':       (0, 0),
     'Baroda':      (0, 0),
-    # Rajasthan
     'Jaipur':      (3550, 6650),
     'Ajmer':       (3550, 6650),
     'Kota':        (3550, 6650),
-    # UP / North
     'Lucknow':     (1350, 4350),
     'Kanpur':      (1350, 4350),
     'Varanasi':    (1350, 4350),
@@ -89,13 +68,11 @@ NM_RATES = {
     'NCR':         (0, 0),
     'Meerut':      (1350, 4350),
     'Bareilly':    (1350, 4350),
-    # South (others)
     'Kochi':       (3250, 6376),
     'Chennai':     (2763, 5011),
     'Agra':        (1350, 4350),
     'Coimbatore':  (2763, 5011),
     'Salem':       (2763, 5011),
-    # Additional mapped cities
     'Raipur':      (0, 0),
     'Mysuru':      (3250, 6376),
     'Warangal':    (0, 0),
@@ -106,7 +83,6 @@ NM_RATES = {
 }
 
 GM_RATES = {
-    # MH clusters — Generation Meter procured by SSE
     'Pune':        (1260, 2620),
     'Nashik':      (1260, 2620),
     'Nagpur':      (1260, 2620),
@@ -118,23 +94,18 @@ GM_RATES = {
     'Mumbai':      (1260, 2620),
     'Amravati':    (1260, 2620),
     'Solapur':     (1260, 2620),
-    # MP clusters — no Gen Meter
     'Bhopal':      (0, 0),
     'Indore':      (0, 0),
     'Jabalpur':    (0, 0),
     'Gwalior':     (0, 0),
-    # South
     'Bengaluru':   (0, 0),
     'Hyderabad':   (0, 0),
-    # Gujarat
     'Ahmedabad':   (0, 0),
     'Surat':       (0, 0),
     'Baroda':      (0, 0),
-    # Rajasthan — Gen Meter applies
     'Jaipur':      (3050, 5650),
     'Ajmer':       (3050, 5650),
     'Kota':        (3050, 5650),
-    # UP / North — no Gen Meter
     'Lucknow':     (0, 0),
     'Kanpur':      (0, 0),
     'Varanasi':    (0, 0),
@@ -142,13 +113,11 @@ GM_RATES = {
     'NCR':         (0, 0),
     'Meerut':      (0, 0),
     'Bareilly':    (0, 0),
-    # South (others)
     'Kochi':       (0, 0),
     'Chennai':     (0, 0),
     'Agra':        (0, 0),
     'Coimbatore':  (0, 0),
     'Salem':       (0, 0),
-    # Additional mapped cities
     'Raipur':      (0, 0),
     'Mysuru':      (0, 0),
     'Warangal':    (0, 0),
@@ -158,40 +127,26 @@ GM_RATES = {
 }
 
 def detect_inverter_phase(inv_item_name):
-    """Detect inverter phase from DN item_name.
-    NM rate uses Inverter Phase (not Sanction Phase).
-    Returns 'Single Phase' or 'Three Phase'."""
     n = str(inv_item_name)
-    # Skip batteries — they aren't the main inverter
     if 'Battery' in n and 'Hybrid' in n:
-        return None  # signal to skip this item
+        return None
     if '3 Phase' in n or '3-Phase' in n or 'Three Phase' in n:
         return 'Three Phase'
     if '1 Phase' in n or '1-Phase' in n or 'Single Phase' in n:
         return 'Single Phase'
-    # Enphase microinverters are always single phase
     if 'ENPHASE' in n.upper() or 'Micro' in n.lower():
         return 'Single Phase'
-    # Default: single phase
     return 'Single Phase'
 
 def calc_metering_backend(city, inv_phase, sanction_phase):
-    """Calculate backend metering = NM_rate(city, phase) + GM_rate(city, sanction_phase).
-    NM uses Sanction Phase (Phase Connection) as primary, with inverter phase as fallback.
-    GM uses Sanction Phase (= Phase Connection from data.csv).
-    Using sanction_phase for NM too gives better accuracy since detect_inverter_phase
-    can default single-phase for 3-phase projects when item name pattern is ambiguous."""
-    # NM lookup — use sanction_phase as primary (more reliable), inv_phase as fallback
     phase_for_nm = sanction_phase if sanction_phase else inv_phase
     nm_idx = 0 if (not phase_for_nm or 'single' in phase_for_nm.lower()) else 1
     nm = NM_RATES.get(city, (0, 0))
-    # GM lookup — keyed on sanction/connection phase
     gm_idx = 0 if (not sanction_phase or 'single' in sanction_phase.lower()) else 1
     gm = GM_RATES.get(city, (0, 0))
     return nm[nm_idx] + gm[gm_idx]
 
 def is_metering_dn_item(item_name):
-    """Check if a DN dump item matches the metering SUMIFS patterns"""
     if 'Communication Modem' in item_name and 'Optical Cable' in item_name:
         return True
     if 'FRP Meter Box' in item_name:
@@ -200,7 +155,6 @@ def is_metering_dn_item(item_name):
         return True
     return False
 
-# ── Cell Name → City/State Lookup ────────────────────────────────────────────
 CELL_CITY_STATE = {
     'Aurangabad Expansion':{'c':'Aurangabad','s':'MH East'},
     'Bangalore Royal Challengers':{'c':'Bengaluru','s':'Karnataka'},
@@ -334,29 +288,21 @@ CELL_CITY_STATE = {
 }
 
 def detect_inverter_type(item_name):
-    """Extract inverter type from DN item name for dashboard type-level analysis.
-    Returns simplified type string like '3 kW', '5 kW 3 Phase', '5 kW Hybrid', 'Enphase'."""
     n = str(item_name)
-    # Skip batteries
     if 'Battery' in n and 'Hybrid' in n:
         return None
-    # Enphase microinverters
     if 'ENPHASE' in n.upper() or 'Micro' in n.lower():
         return 'Enphase'
-    # Extract kW rating
     m = re.search(r'(\d+\.?\d*)\s*[kK][wW]', n)
     if not m:
         return 'Other'
     kw = m.group(1)
-    # Normalize: remove trailing .0
     try:
         kw_f = float(kw)
         kw = str(int(kw_f)) if kw_f == int(kw_f) else str(kw_f)
     except: pass
-    # Check for Hybrid
     if 'Hybrid' in n:
         return f'{kw} kW Hybrid'
-    # Check for phase
     if '3 Phase' in n or '3-Phase' in n or 'Three Phase' in n:
         return f'{kw} kW 3 Phase'
     return f'{kw} kW'
@@ -382,20 +328,14 @@ def parse_date(v):
     return None
 
 
-# ── Pricing Cohort Loader ─────────────────────────────────────────────────────
-# Loads cohort date ranges from pricing cohorts.xlsx.
-# Returns two sorted lists: [(start, end_or_None, name), ...] for GZ and Non-GZ.
-# 'end' is inclusive; None means open-ended (current cohort).
-
 def load_pricing_cohorts(filepath='pricing cohorts.xlsx'):
-    """Load GZ and Non-GZ cohort date ranges from pricing cohorts.xlsx."""
-    gz_cohorts   = []   # list of (start_date, end_date_or_None, cohort_name)
+    gz_cohorts   = []
     non_gz_cohorts = []
     try:
         import openpyxl
         wb = openpyxl.load_workbook(filepath, data_only=True)
         ws = wb['Sheet1']
-        rows = list(ws.iter_rows(min_row=3, max_row=ws.max_row, values_only=True))  # skip 2 header rows
+        rows = list(ws.iter_rows(min_row=3, max_row=ws.max_row, values_only=True))
         for r in rows:
             gz_start, gz_end, gz_name = r[0], r[1], r[2]
             ngz_start, ngz_end, ngz_name = r[3], r[4], r[5]
@@ -422,59 +362,29 @@ GZ_COHORTS, NON_GZ_COHORTS = load_pricing_cohorts()
 
 
 def assign_cohort(qcd_date, offer_type):
-    """Assign a pricing cohort name based on QCD date and offer type.
-
-    Args:
-        qcd_date: datetime object (Quote Completion Date from booking dump)
-        offer_type: str — raw offer from OMS/DN ('GoodZero', 'Regular', 'SSE Blue', etc.)
-
-    Returns:
-        str: cohort name, or '' if QCD date is missing or no cohort matches.
-
-    Boundary rule: end date is EXCLUSIVE (cohort covers start <= qcd < end).
-    This means when two cohorts share the same date (e.g., 9th Apr ends, 15th Apr starts,
-    both listing Apr 15), a QCD of Apr 15 falls into the NEWER cohort ("15th Apr Onwards").
-    This matches the business logic: the cohort name says "15th Apr Onwards" — Apr 15 IS
-    the start of that cohort, not the last day of the previous one.
-    """
     if not qcd_date:
         return ''
     is_gz = offer_type.strip().replace('GoodZero+','GoodZero') in GZ_OFFERS_SET
     cohorts = GZ_COHORTS if is_gz else NON_GZ_COHORTS
-    # Iterate in REVERSE so newer (later-starting) cohorts take priority at shared boundaries
     for (start, end, name) in reversed(cohorts):
         if start is None:
-            # open-start bucket (e.g. "Before Amit's pricing") — end is inclusive here
             if end and qcd_date <= end:
                 return name
         else:
-            # end is exclusive: cohort covers [start, end)
             if qcd_date >= start and (end is None or qcd_date < end):
                 return name
     return ''
 
-
-# ── Booking Dump Loader (QCD dates) ──────────────────────────────────────────
-# PRIMARY:  Fetches live from Google Sheets every time the script runs.
-#           Sheet is public (anyone with link) — no auth required.
-#           URL = OMS Import Sheet → "Booking Dump" tab (gid=628408580)
-# FALLBACK: If the fetch fails (no internet, quota, etc.), reads local
-#           booking_dump.csv cached from the last successful fetch.
-#
-# Output: dict  { sse_id: {'qcd': datetime_or_None, 'offer': str} }
 
 BOOKING_DUMP_URL = (
     'https://docs.google.com/spreadsheets/d/'
     '1NmE-MH9NyLFcbX1JH--j3yqT32sahvJGj82uFK6l9CY'
     '/gviz/tq?tqx=out:csv&gid=628408580'
 )
-BOOKING_DUMP_CACHE = 'booking_dump.csv'   # local cache written after every successful fetch
+BOOKING_DUMP_CACHE = 'booking_dump.csv'
 
 
 def _detect_booking_cols(headers):
-    """Auto-detect SSE ID, QCD date, and Offer Type column names.
-    Handles trailing spaces, slashes, mixed case (e.g. 'QCD / LQUD ').
-    Returns (sse_col, qcd_col, offer_col) — offer_col may be None."""
     sse_col = qcd_col = offer_col = None
     for h in headers:
         hl = h.strip().lower().replace(' ','').replace('_','').replace('-','').replace('/','')
@@ -487,7 +397,6 @@ def _detect_booking_cols(headers):
         if not offer_col and hl in ('offertype','offeringtype','offer','product',
                                     'producttype','schemetype'):
             offer_col = h
-    # Broader fallbacks
     if not sse_col:
         for h in headers:
             if 'sse' in h.lower(): sse_col = h; break
@@ -499,8 +408,6 @@ def _detect_booking_cols(headers):
 
 
 def _parse_booking_rows(rows_raw):
-    """Convert raw DictReader rows into qcd_map.
-    Strips trailing spaces from all keys and values."""
     qcd_map = {}
     if not rows_raw:
         return qcd_map
@@ -511,7 +418,6 @@ def _parse_booking_rows(rows_raw):
         return qcd_map
     if not qcd_col:
         print(f"    ⚠ QCD date column not found. Headers: {headers[:15]}")
-        print(f"       Expected: 'QCD', 'QCD / LQUD', 'LQUD', 'QCD Date', etc.")
         return qcd_map
     loaded = 0
     for row in rows_raw:
@@ -533,19 +439,10 @@ def _parse_booking_rows(rows_raw):
 
 
 def load_booking_dump():
-    """Fetch QCD dates from Google Sheets (live) with local CSV fallback.
-
-    Flow:
-      1. Fetch live CSV from BOOKING_DUMP_URL (public Google Sheet).
-      2. On success → parse, save to BOOKING_DUMP_CACHE, return map.
-      3. On any failure → warn, read BOOKING_DUMP_CACHE instead.
-      4. If cache also missing → return empty map (cohort field stays blank).
-    """
     import urllib.request, io
 
     qcd_map = {}
 
-    # ── Step 1: Try live fetch ────────────────────────────────────────────────
     print(f"  Fetching booking dump from Google Sheets...")
     fetched_csv = None
     try:
@@ -559,7 +456,6 @@ def load_booking_dump():
     except Exception as ex:
         print(f"    ⚠ Live fetch failed: {ex}")
 
-    # ── Step 2: Parse fetched CSV if we got it ────────────────────────────────
     if fetched_csv:
         try:
             reader = csv.DictReader(io.StringIO(fetched_csv))
@@ -567,7 +463,6 @@ def load_booking_dump():
             if rows_raw:
                 qcd_map = _parse_booking_rows(rows_raw)
                 if qcd_map:
-                    # Save as local cache for next fallback
                     try:
                         with open(BOOKING_DUMP_CACHE, 'w', encoding='utf-8', newline='') as f:
                             writer = csv.DictWriter(f, fieldnames=list(rows_raw[0].keys()))
@@ -581,7 +476,6 @@ def load_booking_dump():
         except Exception as parse_ex:
             print(f"    ⚠ Could not parse fetched CSV: {parse_ex} — falling back to cache")
 
-    # ── Step 3: Fallback to local cache ──────────────────────────────────────
     if os.path.isfile(BOOKING_DUMP_CACHE):
         print(f"  Reading cached booking dump from {BOOKING_DUMP_CACHE}...")
         try:
@@ -596,9 +490,7 @@ def load_booking_dump():
         except Exception as ex:
             print(f"    ⚠ Could not read cache: {ex}")
 
-    # ── Step 4: Nothing worked ────────────────────────────────────────────────
     print("  ⚠ Booking dump unavailable — cohort field will be blank for all projects.")
-    print(f"    Fix: ensure the Google Sheet is public OR place {BOOKING_DUMP_CACHE} locally.")
     return qcd_map
 
 
@@ -607,16 +499,9 @@ QCD_MAP = load_booking_dump()
 print(f"  QCD map size: {len(QCD_MAP):,} projects")
 
 
-# ── ERP Categorization ───────────────────────────────────────────────────────
-# Load from erp_categorization.csv if available; this file maps item_code → category
-# and overrides the raw DN item_category field.
-# Expected CSV columns: item_code, item_category  (or Item Code, Category)
-# The file is the authoritative source — raw DN categories are often empty/wrong.
-
 ERP_CAT_MAP = {}
 
 def load_erp_categorization():
-    """Load ERP categorization CSV. Try multiple possible filenames."""
     global ERP_CAT_MAP
     candidates = [
         'erp_categorization.csv',
@@ -630,7 +515,6 @@ def load_erp_categorization():
             with open(fname, 'r', encoding='utf-8', errors='replace') as f:
                 reader = csv.DictReader(f)
                 headers = reader.fieldnames
-                # Detect column names (flexible matching)
                 code_col = None
                 cat_col  = None
                 for h in headers:
@@ -641,7 +525,6 @@ def load_erp_categorization():
                         cat_col = h
                 if not code_col or not cat_col:
                     print(f"  ⚠ Could not find item_code/category columns in {fname}")
-                    print(f"    Headers found: {headers}")
                     continue
                 count = 0
                 for row in reader:
@@ -653,34 +536,24 @@ def load_erp_categorization():
                 print(f"  Loaded {count:,} item_code → category mappings")
                 return True
     print("  ⚠ No ERP categorization file found — using raw DN categories only")
-    print("    (Place erp_categorization.csv in the same directory for accurate COGS)")
     return False
 
 erp_loaded = load_erp_categorization()
 
 
 def resolve_cat(item_code, raw_cat, item_subcategory=''):
-    """Resolve the COGS category for a DN line item.
-    Priority: hardcoded overrides > ERP file > raw DN category."""
     pfx = item_code[:4].upper()
-
-    # 1. Hardcoded exclusions/remaps (highest priority)
     if pfx in DONGLE_PFX:                     return 'EXCLUDE'
     if item_code in CIVL_TO_ELEC:             return 'Electrical BoS'
     if item_code in METERING_REMAP:           return 'Metering'
-
-    # 2. ERP categorization file override (primary source)
     erp = ERP_CAT_MAP.get(item_code)
     if erp:
-        # Apply same transforms as raw_cat
         if erp in EXCLUDE_CATS:               return 'EXCLUDE'
         if erp == 'Fixtures and Tools':
             if item_subcategory in ('Aluminium Ladder', 'Ladder'):
                 return 'Ladder'
             return 'Welcome Kit and Board'
         return erp.strip()
-
-    # 3. Fallback to raw DN category
     if raw_cat in EXCLUDE_CATS:               return 'EXCLUDE'
     if raw_cat == 'Fixtures and Tools':
         if item_subcategory in ('Aluminium Ladder', 'Ladder'):
@@ -696,37 +569,20 @@ CAT_KEY = {
     'Safety':'saf','I&C Accessories':'ica','Welded MMS':'wel','SS NBW':'ssn',
     'Electrical BoS':'ebo','Data Logger':'dlg','Metering':'mtr','Welcome Kit and Board':'wkt',
     'Ladder':'lad',
-    # Raw DN category aliases (no ERP file → fall through to raw category)
-    'MMS':'prf',             # Raw 'MMS' → Prefab MMS
-    'AC Cable':'cab',        # AC Cable → Cables
-    'DC Cable':'cab',        # DC Cable → Cables
-    'ACDB':'ebo',            # ACDB panel → Electrical BoS
-    'Walkway':'saf',         # Walkway → Safety
-    'FRP Walkway':'saf',     # FRP Walkway → Safety
-    'Cable Tray':'ebo',      # Cable Tray → Electrical BoS
-    'Marketing':'wkt',       # Marketing → Welcome Kit and Board
-    'Water Pipeline':'con',  # Water Pipeline → Conduit Pipe
-    'Inverter Cluster':'inv',# Inverter variant
-    'Hybrid Inverter':'inv', # Inverter variant
-    'AMC Accessories':'ica', # AMC → I&C Accessories
-    'Spare Breaker Panel':'ebo', # Breaker Panel → Electrical BoS
+    'MMS':'prf','AC Cable':'cab','DC Cable':'cab','ACDB':'ebo','Walkway':'saf',
+    'FRP Walkway':'saf','Cable Tray':'ebo','Marketing':'wkt','Water Pipeline':'con',
+    'Inverter Cluster':'inv','Hybrid Inverter':'inv','AMC Accessories':'ica',
+    'Spare Breaker Panel':'ebo',
 }
 
-# ── Name shortening for dashboard display ─────────────────────────────────────
 def shorten_mms_item_name(name, subcat=''):
-    """Shorten MMS item names for cleaner dashboard display.
-    Column items: 'Column 2P 6FT Back Medium Gen 2 (150x100x1.6)' → '2P 6FT'
-    Other items: strip prefixes/suffixes
-    """
     n = name.strip()
     if not n:
         return n
-    # For Column items: extract just "1P 6FT", "2P 8FT" etc.
     if 'column' in n.lower() or 'column' in subcat.lower():
         m = re.search(r'\b(\dP)\s+(\d+FT)\b', n, flags=re.IGNORECASE)
         if m:
             return m.group(1) + ' ' + m.group(2)
-    # General shortening for non-column MMS items
     n = re.sub(r'^(?:GM\s+Bridge\s+)', '', n, flags=re.IGNORECASE)
     n = re.sub(r'^(?:Galvalume\s+)', '', n, flags=re.IGNORECASE)
     n = re.sub(r'\s*-\s*(?:SKU|ITEM|PROD)[-\s]?\w+\s*$', '', n, flags=re.IGNORECASE)
@@ -736,17 +592,11 @@ def shorten_mms_item_name(name, subcat=''):
 
 
 def shorten_cable_subcat(name):
-    """Shorten cable subcategory names for cleaner dashboard display.
-    e.g. 'Polycab 4 sqmm Cu DC Cable Red' → '4 sqmm Cu DC Cable'
-    """
     n = name.strip()
     if not n:
         return n
-    # Remove brand prefixes
     n = re.sub(r'^(?:Polycab|Havells|RR\s*Kabel|KEI|Finolex|Anchor)\s+', '', n, flags=re.IGNORECASE)
-    # Remove colour suffixes like " Red", " Black", " Blue/Black"
     n = re.sub(r'\s+(?:Red|Black|Blue|Green|Yellow|White|Grey|Blue/Black|Red/Black)\s*$', '', n, flags=re.IGNORECASE)
-    # Remove trailing codes
     n = re.sub(r'\s*-\s*(?:SKU|ITEM|PROD)[-\s]?\w+\s*$', '', n, flags=re.IGNORECASE)
     n = re.sub(r'\s*-\s*Solar\s*Square.*$', '', n, flags=re.IGNORECASE)
     return n.strip()
@@ -755,18 +605,17 @@ def shorten_cable_subcat(name):
 # ── Build project map ─────────────────────────────────────────────────────────
 print("\nReading data.csv.gz...")
 project_map = {}
-dn_metering = defaultdict(float)   # DN dump metering items per project
-unmapped_cells = defaultdict(int)   # Track unmapped cells for warning
-unmapped_cats  = defaultdict(int)   # Track categories not in CAT_KEY (diagnostic)
+dn_metering = defaultdict(float)
+unmapped_cells = defaultdict(int)
+unmapped_cats  = defaultdict(int)
 excluded_count = 0
 
-# Sub-item aggregations for dashboard analysis
-proj_inv_types = defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0}))  # sse → inv_type → {qty, amt}
-proj_mms_items = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0,'uom':''})))  # sse → subcat → item_name → {qty, amt, uom}
-proj_cable_items = defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0,'cases':0}))  # sse → subcat → {qty, amt, cases}
-proj_onm_amt = defaultdict(float)   # sse → total ONM amount
-proj_qhse_amt = defaultdict(float)  # sse → total QHSE amount
-erp_mms_overrides = defaultdict(lambda: {'resolved_cat':'','amt':0.0,'rows':0,'sses':set(),'item_name':''})  # diagnostic
+proj_inv_types = defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0}))
+proj_mms_items = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0,'uom':''})))
+proj_cable_items = defaultdict(lambda: defaultdict(lambda: {'qty':0,'amt':0,'cases':0}))
+proj_onm_amt = defaultdict(float)
+proj_qhse_amt = defaultdict(float)
+erp_mms_overrides = defaultdict(lambda: {'resolved_cat':'','amt':0.0,'rows':0,'sses':set(),'item_name':''})
 
 with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
     reader = csv.DictReader(f)
@@ -775,26 +624,29 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
         sse = row['SSE ID'].strip()
         if not sse: continue
 
-        try: rev = float(row['Final Revenue Excl. GST']) if row['Final Revenue Excl. GST'].strip() else 0
+        # ── CHANGED: Final Output replaces Final Revenue Excl. GST ──
+        rev_raw = (row.get('Final Output', '') or row.get('Final Revenue Excl. GST', '')).strip()
+        try: rev = float(rev_raw) if rev_raw else 0
         except: rev = 0
+
         try: kw = float(row['Project Size (kW)']) if row['Project Size (kW)'].strip() else 0
         except: kw = 0
         try: amt = float(row['amount']) if row['amount'].strip() else 0
         except: amt = 0
         try: qty = float(row['qty']) if row['qty'].strip() else 0
         except: qty = 0
-        try: rate = float(row['rate']) if row.get('rate','').strip() else 0
+        try: rate = float(row.get('rate','') or 0)
         except: rate = 0
 
         raw_cat   = row['item_category'].strip()
         item_code = row['item_code'].strip()
         item_name = row['item_name'].strip()
         item_subcat = row.get('item_subcategory', '').strip()
-        parent_dn = row.get('parent', '').strip()
+        # ── CHANGED: parent renamed to parent_id ──
+        parent_dn = row.get('parent_id', '').strip()
         uom = row.get('uom', '').strip()
         cat = resolve_cat(item_code, raw_cat, item_subcat)
 
-        # ── DIAGNOSTIC: ERP overrides reclassifying Prefab MMS → different category ──
         if raw_cat == 'Prefab MMS' and cat != 'Prefab MMS':
             d = erp_mms_overrides[item_code]
             d['resolved_cat'] = cat
@@ -803,7 +655,6 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
             d['sses'].add(sse)
             if not d['item_name']: d['item_name'] = item_name
 
-        # Track parent-based ONM and QHSE amounts
         if parent_dn:
             pl = parent_dn.lower()
             if pl.startswith('onm'):
@@ -811,13 +662,13 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
             elif pl.startswith('qhse'):
                 proj_qhse_amt[sse] += amt
 
-        # Track DN dump metering items (from the Excel SUMIFS part of the formula)
         if is_metering_dn_item(item_name):
             dn_metering[sse] += amt
 
         if sse not in project_map:
-            cell = row['Cell Name'].strip()
-            cs   = CELL_CITY_STATE.get(cell)
+            # ── CHANGED: Cell Name no longer in new OMS — use .get() safely ──
+            cell = row.get('Cell Name', '').strip()
+            cs   = CELL_CITY_STATE.get(cell) if cell else None
             city = cs['c'] if cs else row['City'].strip()
             state= cs['s'] if cs else row['State'].strip()
             if cell and not cs and not city:
@@ -827,10 +678,8 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
             offer= offer_raw.replace('GoodZero+','GoodZero')
             phase= row['Phase Connection'].strip()
 
-            # ── Cohort assignment via QCD date from booking dump ──────────────
             qcd_rec = QCD_MAP.get(sse, {})
             qcd_dt  = qcd_rec.get('qcd', None)
-            # Use offer from booking dump if available (more authoritative), else DN offer
             cohort_offer = qcd_rec.get('offer', '') or offer_raw
             cohort = assign_cohort(qcd_dt, cohort_offer)
 
@@ -857,7 +706,6 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
         if cat == 'Module' and item_name:
             if not p['mt']: p['mt'] = item_name; p['mq'] = qty
             elif p['mt'] == item_name: p['mq'] += qty
-            # Module LC: landed cost contribution
             _iname = item_name.strip()
             _lc_wp = 0
             if _iname == '540 Wp Mono Bifacial DCR-PREMIER':
@@ -876,25 +724,21 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
         if cat == 'Inverter' and item_name:
             if not p['it']:
                 p['it'] = item_name; p['iq'] = qty
-            # Detect inverter phase from DN item name (for NM rate lookup)
             if '_inv_phase' not in p or not p['_inv_phase']:
                 detected = detect_inverter_phase(item_name)
                 if detected:
                     p['_inv_phase'] = detected
-            # Track inverter type for type-level analysis
             inv_type = detect_inverter_type(item_name)
             if inv_type:
                 proj_inv_types[sse][inv_type]['qty'] += qty
                 proj_inv_types[sse][inv_type]['amt'] += amt
 
-        # Track MMS sub-items (Prefab MMS, Welded MMS, Tin Shed MMS)
         if cat in ('Prefab MMS', 'Welded MMS', 'Tin Shed MMS') and item_subcat:
             short_name = shorten_mms_item_name(item_name, item_subcat)
             proj_mms_items[sse][item_subcat][short_name]['qty'] += qty
             proj_mms_items[sse][item_subcat][short_name]['amt'] += amt
             proj_mms_items[sse][item_subcat][short_name]['uom'] = uom
 
-        # Track cable sub-items
         if cat == 'Cables' and item_subcat:
             short_cable = shorten_cable_subcat(item_subcat)
             proj_cable_items[sse][short_cable]['qty'] += qty
@@ -905,37 +749,32 @@ print(f"Built {len(project_map):,} projects")
 print(f"  Excluded rows (dongles, Safety Lifeline, Civil Work): {excluded_count:,}")
 
 if unmapped_cells:
-    print(f"\n⚠  WARNING: {len(unmapped_cells)} unmapped cell names (add to CELL_CITY_STATE):")
+    print(f"\n⚠  WARNING: {len(unmapped_cells)} unmapped cell names:")
     for cell, cnt in sorted(unmapped_cells.items(), key=lambda x: -x[1]):
         print(f"    {cell}: {cnt} projects")
 
 if unmapped_cats:
-    print(f"\n⚠  WARNING: {len(unmapped_cats)} categories not in CAT_KEY (not counted in COGS):")
+    print(f"\n⚠  WARNING: {len(unmapped_cats)} categories not in CAT_KEY:")
     for cat, cnt in sorted(unmapped_cats.items(), key=lambda x: -x[1])[:20]:
         print(f"    '{cat}': {cnt:,} rows")
 
 if erp_mms_overrides:
     total_lost = sum(d['amt'] for d in erp_mms_overrides.values())
-    print(f"\n⚠  ERP OVERRIDE ALERT: {len(erp_mms_overrides)} item_code(s) have raw_cat='Prefab MMS'")
-    print(f"   but ERP file maps them differently — causing dashboard vs GMB sheet delta!")
-    print(f"   Total reclassified away from prf: ₹{total_lost:,.0f}  ({total_lost/1e7:.4f} Cr)")
+    print(f"\n⚠  ERP OVERRIDE ALERT: {len(erp_mms_overrides)} item_code(s) reclassified from Prefab MMS")
+    print(f"   Total: ₹{total_lost:,.0f}  ({total_lost/1e7:.4f} Cr)")
     for code, d in sorted(erp_mms_overrides.items(), key=lambda x: -x[1]['amt']):
         print(f"     {code:<20}  → ERP='{d['resolved_cat']}'  ₹{d['amt']:>10,.0f}  ({len(d['sses'])} projects)")
 else:
-    print("\n✓ No ERP overrides reclassify Prefab MMS (delta is data-lag only)")
+    print("\n✓ No ERP overrides reclassify Prefab MMS")
 
-# ── Backend metering injection (formula-based, dual-phase) ────────────────────
-# metering = NM_rate(city, inv_phase) + GM_rate(city, sanction_phase) + DN_dump_items
-# NM uses Inverter Phase (detected from DN item name via detect_inverter_phase)
-# GM uses Sanction Phase (= Phase Connection from data.csv, stored in p['ph'])
-
+# ── Backend metering injection ─────────────────────────────────────────────────
 month_metering = defaultdict(float)
 no_rate_cities = defaultdict(int)
 phase_mismatch_count = 0
 
 for sse, p in project_map.items():
-    inv_phase = p.get('_inv_phase', p['ph'])  # fallback to Phase Connection if no inverter detected
-    sanction_phase = p['ph']                   # Phase Connection = Sanction Phase (100% match)
+    inv_phase = p.get('_inv_phase', p['ph'])
+    sanction_phase = p['ph']
     if inv_phase != sanction_phase:
         phase_mismatch_count += 1
 
@@ -954,7 +793,7 @@ for sse, p in project_map.items():
         no_rate_cities[p['c']] += 1
 
 print()
-print(f"  Phase mismatches (inv_phase ≠ sanction_phase): {phase_mismatch_count}")
+print(f"  Phase mismatches: {phase_mismatch_count}")
 for mkey in sorted(month_metering):
     if month_metering[mkey] > 0:
         count = sum(1 for p in project_map.values() if p['dt'].startswith(mkey))
@@ -975,39 +814,35 @@ for sse, p in project_map.items():
 
     out = {**p, 'cogs': cogs}
 
-    # Add ONM and QHSE amounts from parent-based tracking
     onm_val = proj_onm_amt.get(sse, 0)
     qhse_val = proj_qhse_amt.get(sse, 0)
     if onm_val: out['onm'] = round(onm_val, 2)
     if qhse_val: out['qhs'] = round(qhse_val, 2)
 
-    # Add inverter type breakdown
     ivt = proj_inv_types.get(sse)
     if ivt:
         out['ivt'] = {t: {'q': round(d['qty'],1), 'a': round(d['amt'],2)} for t, d in ivt.items()}
 
-    # Add MMS sub-item breakdown: {subcat: {item_name: {q, a, u}}}
     mms = proj_mms_items.get(sse)
     if mms:
         out['msd'] = {}
         for subcat, items in mms.items():
             out['msd'][subcat] = {nm: {'q': round(d['qty'],2), 'a': round(d['amt'],2)} for nm, d in items.items()}
 
-    # Add cable sub-item breakdown: {subcat: {q, a, n}}
     cab_items = proj_cable_items.get(sse)
     if cab_items:
         out['cbd'] = {sc: {'q': round(d['qty'],2), 'a': round(d['amt'],2), 'n': d['cases']} for sc, d in cab_items.items()}
 
     projects.append(out)
 
-# ── Calculate monthly ONM & QHSE totals from raw data ──────────────────────────
-# This ensures we capture ALL ONM/QHSE, not just those linked to specific projects
+# ── Monthly ONM & QHSE totals ──────────────────────────────────────────────────
 monthly_onm_qhse = defaultdict(lambda: {'onm': 0, 'qhs': 0})
 
 with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
     reader = csv.DictReader(f)
     for row in reader:
-        parent = row.get('parent', '').strip()
+        # ── CHANGED: parent renamed to parent_id ──
+        parent = row.get('parent_id', '').strip()
         posting_date_str = row.get('posting_date', '').strip()
         amount = float(row.get('amount', 0) or 0)
 
@@ -1025,7 +860,6 @@ with gzip.open('data.csv.gz', 'rt', encoding='utf-8', errors='replace') as f:
         except:
             pass
 
-# Create metadata object with monthly totals
 metadata = {
     'monthly_onm_qhse': {k: {'onm': round(v['onm'], 2), 'qhs': round(v['qhs'], 2)} for k, v in monthly_onm_qhse.items()}
 }
@@ -1034,7 +868,6 @@ metadata = {
 output = {'_meta': metadata, 'projects': projects}
 json_str = json.dumps(output, separators=(',',':'))
 
-# Write compressed output using Python gzip (avoids shell gzip permission issues)
 import shutil
 with open('projects_temp.json', 'w', encoding='utf-8') as f:
     f.write(json_str)
@@ -1053,7 +886,6 @@ print(f"\nOutput: {len(projects):,} projects | JSON {raw_mb:.1f} MB → gz {gz_m
 # ── Quick verification ─────────────────────────────────────────────────────────
 print("\n── Verification ──")
 
-# Per-category totals for Jan/Feb 26 (diagnostic)
 for mo, label in [(1, 'Jan 26'), (2, 'Feb 26'), (3, 'Mar 26')]:
     ps = [p for p in projects if p['dt'].startswith(f'2026-{mo:02d}')]
     if not ps: continue
@@ -1062,13 +894,11 @@ for mo, label in [(1, 'Jan 26'), (2, 'Feb 26'), (3, 'Mar 26')]:
     mtr  = sum(p['mtr']  for p in ps)
     gm   = (rev-cogs)/rev*100 if rev else 0
     print(f"\n  {label}: {len(ps)} projects | Rev={rev/1e7:.2f}Cr | COGS={cogs/1e7:.2f}Cr | GM%={gm:.2f}%")
-    # Breakdown by category
-    for cat_name, key in sorted(CAT_KEY.items(), key=lambda x: -sum(p[x[1]] for p in ps)):
-        total = sum(p[key] for p in ps)
+    for cat_name, key in sorted(CAT_KEY.items(), key=lambda x: -sum(p[x[1]] for p in ps if x[1] in p)):
+        total = sum(p.get(key, 0) for p in ps)
         if total > 0:
             print(f"    {cat_name:25s}: ₹{total/1e7:.2f}Cr")
 
-# Metering comparison with actuals
 print("\n── Metering Accuracy ──")
 for mo, label, actual_mtr in [(1, 'Jan 26', 5926077), (2, 'Feb 26', 5755707), (3, 'Mar 26', 7909163)]:
     ps = [p for p in projects if p['dt'].startswith(f'2026-{mo:02d}')]
@@ -1077,7 +907,6 @@ for mo, label, actual_mtr in [(1, 'Jan 26', 5926077), (2, 'Feb 26', 5755707), (3
     pct   = delta / actual_mtr * 100 if actual_mtr else 0
     print(f"  {label}: Metering={mtr:,.0f} (actual {actual_mtr:,.0f}, delta {delta:+,.0f} = {pct:+.2f}%)")
 
-# ── Cohort Coverage Report ────────────────────────────────────────────────────
 print("\n── Cohort Assignment Coverage ──")
 total_p = len(projects)
 with_cohort = sum(1 for p in projects if p.get('cohort',''))
@@ -1086,6 +915,6 @@ print(f"  Projects with QCD date : {with_qcd:,} / {total_p:,} ({with_qcd/total_p
 print(f"  Projects with cohort   : {with_cohort:,} / {total_p:,} ({with_cohort/total_p*100:.1f}%)")
 if with_cohort < total_p:
     missing = total_p - with_cohort
-    print(f"  \u26a0 {missing:,} projects have no cohort (missing from booking dump or QCD blank)")
+    print(f"  ⚠ {missing:,} projects have no cohort")
 
 print("\nDone.")
