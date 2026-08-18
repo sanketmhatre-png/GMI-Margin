@@ -1072,9 +1072,20 @@ function computeCOGS(items){
   let dataLogger=0,ladder=0,welcomeKit=0,moduleLCRaw=0,moduleQty=0,installedKitts=0;
   const invDescs=[];
   const itemCode = r => (fld(r,'item_code','Item Code','item_Code')||'').trim();
+  const subcat   = r => (fld(r,'item_subcategory','Item Subcategory','Item Sub Category','item_sub_category')||'').trim();
+
+  // MMS breakdown buckets
+  const MMS_CATS    = new Set(['Tin Shed MMS','Welded MMS','MMS','Prefab MMS']);
+  const PURLIN_SC   = new Set(['Purlins J Series','Purlin Gen 2']);
+  const RAFTER_SC   = new Set(['Rafter Gen 2','Rafter 3P Jointer','Rafters J Series','Rafter']);
+  const COLUMN_SC   = new Set(['Column','Column Gen 2']);
+  let mmsP_qty=0,mmsP_amt=0;  // Purlin J
+  let mmsR_qty=0,mmsR_amt=0;  // Rafter
+  let mmsC_qty=0,mmsC_amt=0;  // Column
+  let mmsO_qty=0,mmsO_amt=0;  // Others (MMS cat, no matching subcat)
 
   for(const r of items){
-    const c=cat(r), a=amt(r), n=name(r), rt=rate(r), q=qty(r), d=desc(r);
+    const c=cat(r), a=amt(r), n=name(r), rt=rate(r), q=qty(r), d=desc(r), sc=subcat(r);
     if(c==='Module'){                                                          module_+=a; moduleQty+=q; }
     if(['Inverter','Hybrid Inverter','Inverter Cluster'].includes(c)){       inverter+=a; if(d&&!invDescs.includes(d))invDescs.push(d); }
     if(['AC Cable','DC Cable','Cables','2C Cu Arm AC Cable'].includes(c))    cables+=a;
@@ -1098,6 +1109,13 @@ function computeCOGS(items){
     // Module LC raw (qty × watts, rate-gated)
     if(n==='540 Wp Mono Bifacial DCR-PREMIER'&&rt!==11055)                  moduleLCRaw+=q*540;
     else if(n==='610 Wp Mono Bifacial Topcon N-Type DCR-PREMIER'&&rt<=13041.8) moduleLCRaw+=q*610;
+    // MMS breakdown by subcategory
+    if(MMS_CATS.has(c)){
+      if(PURLIN_SC.has(sc))        { mmsP_qty+=q; mmsP_amt+=a; }
+      else if(RAFTER_SC.has(sc))   { mmsR_qty+=q; mmsR_amt+=a; }
+      else if(COLUMN_SC.has(sc))   { mmsC_qty+=q; mmsC_amt+=a; }
+      else                         { mmsO_qty+=q; mmsO_amt+=a; }
+    }
   }
 
   // Apply installation-month multiplier to Module LC
@@ -1110,6 +1128,15 @@ function computeCOGS(items){
   return{
     'Installed Kitts':           Math.round(installedKitts),
     'Kitts':                     kitts,
+    // MMS breakdown by subcategory
+    'MMS: Purlin J - Qty': Math.round(mmsP_qty),
+    'MMS: Purlin J - Amt': r0(mmsP_amt),
+    'MMS: Column - Qty':   Math.round(mmsC_qty),
+    'MMS: Column - Amt':   r0(mmsC_amt),
+    'MMS: Rafter - Qty':   Math.round(mmsR_qty),
+    'MMS: Rafter - Amt':   r0(mmsR_amt),
+    'MMS: Others - Qty':   Math.round(mmsO_qty),
+    'MMS: Others - Amt':   r0(mmsO_amt),
     'COGS: Module':              r0(module_),
     'COGS: Inverter':            r0(inverter),
     'COGS: Cables':              r0(cables),
@@ -1442,6 +1469,7 @@ function switchTab(tab){
   } else if(tab === 'wp'){
     wpPage.classList.add('visible');
     tabWp.classList.add('active');
+    _syncGmToggleUI();
     renderWpBenchmark();
   }
 }
@@ -1452,6 +1480,9 @@ function updateFlagBadge(){
 }
 
 // ── Analysis Tab ──
+// MMS sub-groups for Analysis tab
+const MMS_GROUPS = ['Purlin J','Column','Rafter','Others'];
+
 const ANALYSIS_COLS = [
   'SSE ID',
   'Installation Completion Date',
@@ -1461,26 +1492,72 @@ const ANALYSIS_COLS = [
   'Offer Type',
   'Installed Kitts',
   'Kitts',
+  // MMS breakdown — 4 groups × (qty + amount) = 8 cols
+  'MMS: Purlin J - Qty', 'MMS: Purlin J - Amt',
+  'MMS: Column - Qty',          'MMS: Column - Amt',
+  'MMS: Rafter - Qty',          'MMS: Rafter - Amt',
+  'MMS: Others - Qty',          'MMS: Others - Amt',
+  // BOM Details
   'BOM Details Type 1',
   'BOM Details Type 2',
   'BOM Details Type 3',
   'BOM Details Type 4',
-  'Final Output',
-  'Installed COGS',
-  'GM %'
 ];
 
 function buildAnalysisHeader(){
-  const tr = document.createElement('tr');
-  ANALYSIS_COLS.forEach(col => {
-    const th = document.createElement('th');
-    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col === 'Kitts' ? 'Kitts-0071' : col;
-    if(col === 'Kitts')          th.style.cssText = 'background:#fff7ed;color:#c2410c;border-left:2px solid #fed7aa';
-    if(col === 'Installed Kitts') th.style.cssText = 'background:#f5f3ff;color:#7c3aed;border-left:2px solid #ddd6fe';
-    tr.appendChild(th);
+  const head = document.getElementById('analysis-head');
+  head.innerHTML = '';
+
+  // ── ROW 1: group bands ──
+  const tr1 = document.createElement('tr'); tr1.className='grp-row';
+  const groups1 = [
+    {label:'',              cols:1,  bg:'#f8fafc', cl:'#334155', bl:''},
+    {label:'',              cols:1,  bg:'#f8fafc', cl:'#334155', bl:''},           // Install Date
+    {label:'Project Info',  cols:4,  bg:'#f1f5f9', cl:'#475569', bl:'2px solid #94a3b8'},
+    {label:'Kitts',         cols:2,  bg:'#fff7ed', cl:'#c2410c', bl:'2px solid #fed7aa'},
+    {label:'MMS Breakdown', cols:8,  bg:'#e0e7ff', cl:'#3730a3', bl:'2px solid #6366f1'},
+    {label:'BOM Details',   cols:4,  bg:'#f0fdf4', cl:'#15803d', bl:'2px solid #86efac'},
+  ];
+  groups1.forEach(g=>{
+    const th=document.createElement('th');
+    th.colSpan=g.cols; th.textContent=g.label;
+    th.style.cssText='text-align:center;font-weight:800;font-size:8px;letter-spacing:.1em;text-transform:uppercase;padding:4px 8px;'
+      +'background:'+g.bg+';color:'+g.cl+';'+(g.bl?'border-left:'+g.bl+';':'');
+    tr1.appendChild(th);
   });
-  document.getElementById('analysis-head').innerHTML = '';
-  document.getElementById('analysis-head').appendChild(tr);
+  head.appendChild(tr1);
+
+  // ── ROW 2: individual column headers ──
+  const tr2 = document.createElement('tr'); tr2.className='col-row';
+
+  const mkTh=(label,style='')=>{
+    const th=document.createElement('th'); th.textContent=label;
+    if(style) th.style.cssText=style; return th;
+  };
+
+  // SSE ID
+  tr2.appendChild(mkTh('SSE ID','background:#f8fafc;color:#334155;min-width:90px'));
+  // Install Date
+  tr2.appendChild(mkTh('Install Date','background:#f8fafc;color:#334155;min-width:90px'));
+  // Project Info (4)
+  [['Customer','110px'],['City','72px'],['Size kW','62px'],['Offer','80px']].forEach(([l,w],i)=>{
+    tr2.appendChild(mkTh(l,'background:#f1f5f9;color:#475569;min-width:'+w+(i===0?';border-left:2px solid #94a3b8':'')));
+  });
+  // Kitts (2)
+  tr2.appendChild(mkTh('Installed','background:#fff7ed;color:#7c3aed;min-width:70px;border-left:2px solid #ddd6fe;text-align:center'));
+  tr2.appendChild(mkTh('Kitts-0071','background:#fff7ed;color:#c2410c;min-width:70px;text-align:center'));
+  // MMS groups (8) — qty + amt each
+  MMS_GROUPS.forEach((grp,i)=>{
+    const bl=i===0?';border-left:2px solid #6366f1':'';
+    tr2.appendChild(mkTh(grp+' Qty','background:#e0e7ff;color:#3730a3;text-align:center;min-width:65px'+bl));
+    tr2.appendChild(mkTh(grp+' ₹','background:#e0e7ff;color:#3730a3;text-align:center;min-width:90px'));
+  });
+  // BOM Details (4)
+  [1,2,3,4].forEach((n,i)=>{
+    tr2.appendChild(mkTh('BOM Type '+n,'background:#f0fdf4;color:#15803d;min-width:120px'+(i===0?';border-left:2px solid #86efac':'')));
+  });
+
+  head.appendChild(tr2);
 }
 
 function buildAnalysisFilters(){
@@ -1530,22 +1607,17 @@ function renderAnalysis(){
 
       if(col === 'SSE ID'){
         td.className = 'c-sse'; td.textContent = v;
-      } else if(col === 'Final Output'){
-        const n = parseFloat(v)||0;
-        td.className = 'c-cogs';
-        td.textContent = n ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
-      } else if(col === 'Installed COGS'){
+      } else if(col.startsWith('MMS: ') && col.endsWith(' - Qty')){
         const n = Number(v)||0;
-        td.className = 'c-cogs';
-        td.textContent = n ? '₹'+n.toLocaleString('en-IN') : '—';
-      } else if(col === 'GM %'){
-        const n = parseFloat(v);
-        if(isNaN(n)||v===''){td.textContent='—';td.style.color='#94a3b8';}
-        else{
-          const pct=(n*100).toFixed(1)+'%';
-          const color=n>=0.37?'#15803d':n>=0.20?'#d97706':'#dc2626';
-          td.innerHTML='<span style="font-weight:700;color:'+color+'">'+pct+'</span>';
-        }
+        const isFirst = col === 'MMS: Purlin J - Qty';
+        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#3730a3;background:#eef2ff'+(isFirst?';border-left:2px solid #6366f1':'');
+        td.textContent = n ? n.toLocaleString('en-IN') : '—';
+      } else if(col.startsWith('MMS: ') && col.endsWith(' - Amt')){
+        const n = Number(v)||0;
+        const kw = parseFloat(row['Project Size (kW)'])||0;
+        const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
+        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#1e1b4b;background:#eef2ff';
+        td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
       } else if(col === 'Installed Kitts'){
         const n = Number(v)||0;
         td.style.cssText = 'font-weight:700;font-variant-numeric:tabular-nums;color:#7c3aed;background:#f5f3ff;border-left:2px solid #ddd6fe;border-right:2px solid #ddd6fe';
@@ -1559,6 +1631,9 @@ function renderAnalysis(){
       } else if(col === 'Project Size (kW)'){
         const n = parseFloat(v)||0;
         td.textContent = n ? n.toFixed(2)+' kW' : v;
+      } else if(col === 'BOM Details Type 1'){
+        td.style.cssText = 'border-left:2px solid #86efac';
+        td.textContent = v; td.title = v;
       } else {
         td.textContent = v; td.title = v;
       }
@@ -1616,17 +1691,25 @@ function setWpHybrid(mode){
 
 function toggleWpGm(){
   wpGmFilter = !wpGmFilter;
+  _syncGmToggleUI();
+  renderWpBenchmark();
+}
+
+// Keep toggle button in sync with wpGmFilter state
+function _syncGmToggleUI(){
   const btn = document.getElementById('wp-toggle');
   const lbl = document.getElementById('wp-toggle-label');
   const ico = document.getElementById('wp-toggle-icon');
+  if(!btn) return;
   if(wpGmFilter){
+    // Filter is ON — button shows active state + what click will do (clear it)
     btn.style.background='#dc2626'; btn.style.color='#fff'; btn.style.borderColor='#dc2626';
-    ico.textContent='🔴'; lbl.textContent='GM% < 38% only';
+    ico.textContent='✕'; lbl.textContent='Show all projects';
   } else {
+    // Filter is OFF — button shows inactive + what click will do (apply filter)
     btn.style.background='#fff'; btn.style.color='#dc2626'; btn.style.borderColor='#fecdd3';
-    ico.textContent='📊'; lbl.textContent='Show all projects';
+    ico.textContent='🔴'; lbl.textContent='GM% < 38% only';
   }
-  renderWpBenchmark();
 }
 
 function buildMonthKey(row){
