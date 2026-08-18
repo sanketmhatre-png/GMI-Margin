@@ -6,156 +6,449 @@
 <title>Solarsquare · SSE ID Analysis</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 <style>
+/* ─────────────────────────────────────────────
+   SOLAR SQUARE · GMI MARGIN DASHBOARD
+   Visual design system — Stripe / Linear aesthetic
+   ───────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
 :root{
-  --navy:#1a2366;
-  --navy-dark:#111a52;
-  --blue1:#2a5de8;
-  --blue2:#1a3fbc;
-  --teal1:#0ab5c5;
-  --teal2:#079aaa;
-  --red1:#e84040;
-  --red2:#c42e2e;
-  --amber1:#f5a623;
-  --amber2:#d4891a;
-  --surface:#f0f2f8;
+  /* Core brand palette */
+  --navy:#0c1445;
+  --navy-dark:#06091f;
+  --blue1:#2563eb;
+  --blue2:#1d4ed8;
+  --teal1:#0891b2;
+  --teal2:#0e7490;
+  --red1:#ef4444;
+  --red2:#dc2626;
+  --amber1:#f59e0b;
+  --amber2:#d97706;
+  --emerald:#10b981;
+  --emerald-dark:#059669;
+
+  /* Surfaces */
+  --surface:#f1f5f9;
   --card:#ffffff;
-  --border:#dde2ef;
+  --border:#e2e8f0;
+  --border-light:#f1f5f9;
+
+  /* Text */
   --text1:#0f172a;
-  --text2:#4a5568;
+  --text2:#475569;
   --text3:#94a3b8;
-  --accent:#2a5de8;
-  --row-hover:#f5f7ff;
+  --accent:#2563eb;
+
+  /* Table */
+  --row-hover:#eff6ff;
   --stripe:#fafbff;
 }
-html,body{height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;background:var(--surface);color:var(--text1);overflow:hidden}
 
-/* ── HEADER ── */
+html,body{
+  height:100%;
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:13px;background:var(--surface);color:var(--text1);overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ════════════════════════════════════════
+   1. HEADER
+   ════════════════════════════════════════ */
 .hdr{
-  background:linear-gradient(90deg,var(--navy-dark) 0%,var(--navy) 100%);
-  height:56px;display:flex;align-items:center;justify-content:space-between;
-  padding:0 24px;
-  box-shadow:0 2px 12px rgba(17,26,82,.4);
+  background:linear-gradient(135deg, #06091f 0%, #0c1445 55%, #102060 100%);
+  height:62px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;
+  flex-shrink:0;
+  position:relative;
+  /* Subtle bottom shimmer line */
+  box-shadow:
+    0 1px 0 rgba(255,255,255,.07),
+    0 4px 32px rgba(6,9,31,.7);
+}
+
+/* Frosted radial glow behind logo */
+.hdr::before{
+  content:'';
+  position:absolute;left:0;top:0;
+  width:280px;height:100%;
+  background:radial-gradient(ellipse at 30% 50%, rgba(37,99,235,.18) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+/* Hairline shimmer at bottom edge */
+.hdr::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;
+  height:1px;
+  background:linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,255,255,.1) 20%,
+    rgba(255,255,255,.06) 50%,
+    rgba(255,255,255,.1) 80%,
+    transparent 100%
+  );
+}
+
+.hdr-left{display:flex;align-items:center;gap:16px}
+
+.hdr-logo img{
+  height:27px;object-fit:contain;
+  filter:brightness(0) invert(1);
+  opacity:.92;
+}
+
+/* Refined separator */
+.hdr-div{
+  width:1px;height:24px;
+  background:linear-gradient(180deg, transparent, rgba(255,255,255,.2), transparent);
   flex-shrink:0;
 }
-.hdr-left{display:flex;align-items:center;gap:14px}
-.hdr-logo img{height:28px;object-fit:contain;filter:brightness(0) invert(1)}
-.hdr-div{width:1px;height:24px;background:rgba(255,255,255,.2)}
-.hdr-text h1{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.01em}
-.hdr-text p{font-size:10.5px;color:rgba(255,255,255,.5);margin-top:1px;text-transform:uppercase;letter-spacing:.06em}
-.hdr-right{display:flex;align-items:center;gap:10px}
-.hdr-sync{font-size:11.5px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:6px}
-.hdr-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 0 2px rgba(74,222,128,.25)}
-.hdr-dot.loading{background:#fbbf24;box-shadow:0 0 0 2px rgba(251,191,36,.25)}
-.hdr-dot.error{background:#f87171;box-shadow:0 0 0 2px rgba(248,113,113,.25)}
-.btn-upload,.btn-dl{
+
+.hdr-text h1{
+  font-size:14.5px;font-weight:700;
+  color:#f8fafc;letter-spacing:-.025em;line-height:1.2;
+}
+.hdr-text p{
+  font-size:9.5px;color:rgba(255,255,255,.38);
+  margin-top:2.5px;text-transform:uppercase;letter-spacing:.1em;font-weight:500;
+}
+
+.hdr-right{display:flex;align-items:center;gap:8px}
+
+/* Live sync pill */
+.hdr-sync{
   display:flex;align-items:center;gap:6px;
-  padding:6px 14px;border-radius:6px;border:none;
-  background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:500;
-  cursor:pointer;transition:background .15s;
+  padding:4px 11px 4px 9px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:20px;
+  font-size:11px;color:rgba(255,255,255,.55);
+  letter-spacing:.01em;
 }
-.btn-upload:hover,.btn-dl:hover{background:rgba(255,255,255,.25)}
-.btn-dl{background:rgba(74,222,128,.2);}
-.btn-dl:hover{background:rgba(74,222,128,.35);}
-.btn-dl:disabled{opacity:.45;cursor:default;}
 
-/* ── FILTER BAR ── */
+/* Pulsing live dot */
+.hdr-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:#4ade80;flex-shrink:0;
+  box-shadow:0 0 0 0 rgba(74,222,128,.4);
+  animation:pulse-live 2.4s ease-in-out infinite;
+}
+@keyframes pulse-live{
+  0%  {box-shadow:0 0 0 0   rgba(74,222,128,.4)}
+  60% {box-shadow:0 0 0 5px rgba(74,222,128,0)}
+  100%{box-shadow:0 0 0 0   rgba(74,222,128,0)}
+}
+.hdr-dot.loading{
+  background:#fbbf24;animation:pulse-amber 1.6s ease-in-out infinite;
+}
+@keyframes pulse-amber{
+  0%  {box-shadow:0 0 0 0   rgba(251,191,36,.5)}
+  60% {box-shadow:0 0 0 5px rgba(251,191,36,0)}
+  100%{box-shadow:0 0 0 0   rgba(251,191,36,0)}
+}
+.hdr-dot.error{background:#f87171;animation:none;box-shadow:0 0 0 2px rgba(248,113,113,.25)}
+
+/* Download button — emerald accent */
+.btn-dl{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:8px;border:none;
+  background:linear-gradient(135deg, var(--emerald), var(--emerald-dark));
+  color:#fff;font-size:11.5px;font-weight:600;
+  cursor:pointer;transition:all .18s;
+  box-shadow:0 1px 3px rgba(16,185,129,.4), 0 0 0 1px rgba(16,185,129,.3);
+  letter-spacing:.01em;font-family:inherit;
+}
+.btn-dl:hover{
+  background:linear-gradient(135deg, #0ea472, #047857);
+  box-shadow:0 3px 10px rgba(16,185,129,.45);
+  transform:translateY(-1px);
+}
+.btn-dl:disabled{opacity:.38;cursor:default;transform:none;box-shadow:none}
+
+/* Refresh button — ghost */
+.btn-upload{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 13px;border-radius:8px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.07);
+  color:rgba(255,255,255,.68);font-size:11.5px;font-weight:500;
+  cursor:pointer;transition:all .15s;font-family:inherit;
+}
+.btn-upload:hover{
+  background:rgba(255,255,255,.13);
+  border-color:rgba(255,255,255,.25);
+  color:#fff;
+}
+
+/* ════════════════════════════════════════
+   2. FILTER BAR
+   ════════════════════════════════════════ */
 .fbar{
-  background:var(--card);border-bottom:1px solid var(--border);
-  padding:10px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  background:#fff;
+  border-bottom:1px solid #e8edf5;
+  padding:6px 20px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:5px;
+  flex-shrink:0;
+  box-shadow:0 1px 4px rgba(15,23,42,.04);
+}
+
+.fbar-label{
+  font-size:10px;font-weight:700;color:#b0bec5;
+  text-transform:uppercase;letter-spacing:.09em;margin-right:4px;
   flex-shrink:0;
 }
-.fbar-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-right:2px}
-.fi,.fs{
-  padding:6px 11px;border:1.5px solid var(--border);border-radius:7px;
-  background:#fff;color:var(--text1);font-size:12.5px;outline:none;
-  transition:border-color .15s;
-}
-.fi:focus,.fs:focus{border-color:var(--accent)}
-#fi-search{min-width:200px}
-.fsep{width:1px;height:18px;background:var(--border)}
-.fclr{
-  font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;
-  padding:5px 10px;border-radius:6px;transition:background .12s;display:flex;align-items:center;gap:4px;
-}
-.fclr:hover{background:#eef2ff}
-.fresults{margin-left:auto;font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums;font-weight:500}
 
-/* ── KPI GRID ── */
-.kpi-wrap{padding:16px 24px 12px;flex-shrink:0}
-.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+/* Search & text inputs */
+.fi{
+  padding:6px 10px 6px 32px;
+  border:1.5px solid #e2e8f0;border-radius:7px;
+  background:#fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b0bec5' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E")
+    no-repeat 9px center;
+  color:var(--text1);font-size:12px;outline:none;
+  transition:border-color .15s, box-shadow .15s;
+  font-family:inherit;
+}
+.fi:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+.fi::placeholder{color:#b0bec5;font-size:11.5px}
+#fi-search{min-width:210px}
+
+/* Dropdowns — custom chevron, no OS default */
+.fs{
+  padding:6px 26px 6px 10px;
+  border:1.5px solid #e2e8f0;border-radius:7px;
+  background:#fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  color:var(--text1);font-size:12px;outline:none;
+  appearance:none;-webkit-appearance:none;
+  cursor:pointer;
+  transition:border-color .15s, box-shadow .15s;
+  font-family:inherit;
+}
+.fs:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+
+.fsep{width:1px;height:18px;background:#e8edf5;flex-shrink:0;margin:0 2px}
+
+/* Clear / Reset link */
+.fclr{
+  font-size:11.5px;font-weight:600;color:#94a3b8;cursor:pointer;
+  padding:5px 10px;border-radius:6px;
+  transition:all .12s;
+  display:flex;align-items:center;gap:3px;
+  border:1px solid transparent;font-family:inherit;
+}
+.fclr:hover{color:#dc2626;background:#fef2f2;border-color:#fecdd3}
+
+/* Results count pill */
+.fresults{
+  margin-left:auto;font-size:11px;color:var(--text3);
+  font-variant-numeric:tabular-nums;font-weight:600;
+  background:#f1f5f9;padding:3px 11px;border-radius:99px;
+  border:1px solid #e8edf5;letter-spacing:.01em;
+}
+
+/* ════════════════════════════════════════
+   3. KPI CARDS
+   ════════════════════════════════════════ */
+.kpi-wrap{padding:10px 24px 8px;flex-shrink:0}
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
 @media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
 
-.kpi{border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;cursor:default}
-.kpi-white{background:#fff;border:1px solid var(--border);box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.kpi-blue {background:linear-gradient(135deg,var(--blue1),var(--blue2));color:#fff}
-.kpi-teal {background:linear-gradient(135deg,var(--teal1),var(--teal2));color:#fff}
-.kpi-amber{background:linear-gradient(135deg,var(--amber1),var(--amber2));color:#fff}
-.kpi-navy {background:linear-gradient(135deg,#2d3a8c,#1a2366);color:#fff}
-.kpi-slate{background:linear-gradient(135deg,#475569,#334155);color:#fff}
+.kpi{
+  border-radius:12px;padding:14px 16px;
+  position:relative;overflow:hidden;cursor:default;
+  transition:transform .15s, box-shadow .15s;
+}
+.kpi:hover{transform:translateY(-2px)}
 
-.kpi-label{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;opacity:.7;margin-bottom:6px}
+/* White / neutral card */
+.kpi-white{
+  background:#fff;
+  border:1px solid #e8edf5;
+  border-top:3px solid var(--accent);
+  box-shadow:
+    0 1px 3px rgba(15,23,42,.06),
+    0 4px 12px rgba(15,23,42,.04);
+}
+.kpi-white:hover{
+  box-shadow:0 4px 16px rgba(37,99,235,.12), 0 8px 24px rgba(15,23,42,.06);
+  border-top-color:#1d4ed8;
+}
+
+/* Blue card */
+.kpi-blue{
+  background:linear-gradient(145deg, #2563eb 0%, #1e3a8a 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(37,99,235,.32), 0 1px 3px rgba(30,58,138,.3);
+}
+.kpi-blue::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.14) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* Teal card */
+.kpi-teal{
+  background:linear-gradient(145deg, #0891b2 0%, #0c4a6e 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(8,145,178,.28);
+}
+.kpi-teal::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.11) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* Amber card */
+.kpi-amber{
+  background:linear-gradient(145deg, #f59e0b 0%, #92400e 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(245,158,11,.28);
+}
+.kpi-amber::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.13) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* Navy card */
+.kpi-navy{
+  background:linear-gradient(145deg, #1e3a8a 0%, #06091f 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(30,58,138,.35);
+}
+.kpi-navy::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.09) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* Slate card */
+.kpi-slate{
+  background:linear-gradient(145deg, #475569 0%, #1e293b 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(71,85,105,.28);
+}
+.kpi-slate::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.08) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* KPI typography */
+.kpi-label{
+  font-size:9px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;opacity:.6;margin-bottom:6px;
+}
 .kpi-white .kpi-label{color:var(--text3);opacity:1}
 
-.kpi-big{font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.kpi-big{
+  font-size:26px;font-weight:800;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+}
 .kpi-white .kpi-big{color:var(--text1)}
 
+/* Filtered value — clearly visible pill on colored cards */
 .kpi-filtered{
-  font-size:11.5px;font-weight:600;margin-top:5px;opacity:.85;
-  font-variant-numeric:tabular-nums;min-height:16px;
+  display:inline-block;
+  font-size:11.5px;font-weight:700;margin-top:7px;
+  font-variant-numeric:tabular-nums;min-height:20px;
+  padding:2px 9px;border-radius:20px;
+  background:rgba(255,255,255,.22);
+  color:#fff;
+  letter-spacing:.01em;
 }
-.kpi-white .kpi-filtered{color:var(--accent)}
+.kpi-white .kpi-filtered{
+  color:var(--accent);
+  background:#dbeafe;
+  border:1px solid #bfdbfe;
+}
 
-.kpi-sub{font-size:10.5px;opacity:.6;margin-top:2px}
+.kpi-sub{font-size:9.5px;opacity:.5;margin-top:4px;font-weight:400}
 .kpi-white .kpi-sub{color:var(--text3);opacity:1}
 
 .kpi-icon{
-  position:absolute;right:14px;top:14px;font-size:28px;opacity:.15;
+  position:absolute;right:14px;top:14px;font-size:26px;opacity:.12;
+  user-select:none;pointer-events:none;
 }
-.kpi-white .kpi-icon{opacity:.08}
+.kpi-white .kpi-icon{opacity:.06}
 
-/* ── TABLE AREA ── */
+/* ════════════════════════════════════════
+   4. TABLE
+   ════════════════════════════════════════ */
 .table-wrap{
-  margin:0 24px 16px;
-  background:#fff;border:1px solid var(--border);border-radius:12px;
+  margin:0 16px 12px;
+  background:#fff;
+  border:1px solid #e8edf5;
+  border-radius:12px;
   display:flex;flex-direction:column;
-  overflow:hidden;
-  /* Fill remaining vertical space */
-  flex:1;
-  min-height:0;
+  overflow:hidden;flex:1;min-height:0;
+  box-shadow:0 1px 4px rgba(15,23,42,.05), 0 4px 16px rgba(15,23,42,.04);
 }
+
 .table-title-row{
-  padding:12px 16px 0;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+  padding:12px 18px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+  border-bottom:1px solid #f1f5f9;
 }
-.table-title{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em}
-.table-count{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+.table-title{
+  font-size:10.5px;font-weight:700;color:var(--text2);
+  text-transform:uppercase;letter-spacing:.07em;
+}
+.table-count{
+  font-size:11px;color:var(--text3);
+  font-variant-numeric:tabular-nums;font-weight:600;
+  background:#f1f5f9;padding:2px 10px;border-radius:99px;
+  border:1px solid #e8edf5;
+}
 
 .table-scroll{overflow-y:auto;overflow-x:auto;flex:1;min-height:0}
-/* Custom scrollbar */
-.table-scroll::-webkit-scrollbar{width:6px;height:6px}
+.table-scroll::-webkit-scrollbar{width:5px;height:5px}
 .table-scroll::-webkit-scrollbar-track{background:transparent}
-.table-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-.table-scroll::-webkit-scrollbar-thumb:hover{background:#b0b8d0}
+.table-scroll::-webkit-scrollbar-thumb{background:#dde4f0;border-radius:3px}
+.table-scroll::-webkit-scrollbar-thumb:hover{background:#b5c0d8}
 
-table{width:100%;border-collapse:collapse;font-size:12.5px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+
 thead th{
-  background:#fff;position:sticky;top:0;z-index:5;
-  padding:10px 14px;text-align:left;
-  font-size:10px;font-weight:700;color:var(--text3);
+  background:#f8fafc;
+  position:sticky;top:0;z-index:5;
+  padding:7px 9px;text-align:left;
+  font-size:8.5px;font-weight:700;color:#64748b;
   text-transform:uppercase;letter-spacing:.06em;
-  border-bottom:2px solid var(--border);
-  white-space:nowrap;cursor:pointer;user-select:none;transition:color .12s;
+  border:1px solid #e2e8f0;
+  border-bottom:2px solid #334155;
+  white-space:nowrap;
+  cursor:pointer;user-select:none;
+  transition:color .12s, background .12s;
 }
-thead th:hover{color:var(--accent)}
+thead th:hover{color:var(--accent);background:#eef2ff}
 thead th.sort-asc::after{content:" ↑";color:var(--accent)}
 thead th.sort-desc::after{content:" ↓";color:var(--accent)}
 
-tbody tr{border-bottom:1px solid #f0f2f8;transition:background .07s}
-tbody tr:nth-child(even){background:var(--stripe)}
-tbody tr:hover{background:var(--row-hover)}
-tbody tr:last-child{border-bottom:none}
-td{padding:9px 14px;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
-td.c-sse{font-weight:700;color:var(--accent);font-size:12px}
+tbody tr{transition:background .08s}
+tbody tr:nth-child(even){background:#fafbff}
+tbody tr:hover{background:#eff6ff}
+td{padding:6px 9px;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;border:1px solid #e8edf5}
+
+/* SSE ID — monospace link style */
+td.c-sse{
+  font-weight:700;color:#2563eb;font-size:10.5px;
+  font-family:"SF Mono","Cascadia Code","Fira Code",ui-monospace,monospace;
+  letter-spacing:.01em;
+}
+
 td.c-kitts{background:#fff7ed;color:#c2410c;font-weight:700;font-variant-numeric:tabular-nums;font-size:12px;border-left:2px solid #fed7aa;border-right:2px solid #fed7aa}
 thead th[data-col="Kitts"]{background:#fff7ed;color:#c2410c;border-left:2px solid #fed7aa}
 
@@ -164,71 +457,67 @@ td.c-cogs{font-variant-numeric:tabular-nums;color:#1e40af;font-weight:600;font-s
 td.c-cogs-desc{color:var(--text2);font-size:11.5px;max-width:220px;white-space:normal;line-height:1.3}
 thead th[data-col^="COGS:"],thead th[data-col="Final Output"],
 thead th[data-col="Installed COGS"]{background:#f0f4ff;color:#1e40af;border-left:2px solid #c7d7ff}
-thead th[data-col="GM %"]{background:#f0fdf4;color:#15803d;border-left:2px solid #86efac;font-size:11px}
+thead th[data-col="GM %"]{background:#f0fdf4;color:#15803d;border-left:2px solid #86efac;font-size:9.5px}
 thead th[data-col^="COGS:"]:first-of-type{border-left:2px solid #93b4fd}
-td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
+td:has(+ td.c-cogs):not(.c-cogs){}
 
-/* badges */
-.badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:10.5px;font-weight:600}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.02em}
 .b-pa26{background:#dbeafe;color:#1e40af}
 .b-pre26{background:#ede9fe;color:#5b21b6}
 .b-cash{background:#d1fae5;color:#065f46}
 .b-emi{background:#fef3c7;color:#92400e}
 .b-def{background:#f1f5f9;color:#475569}
 
-/* ── LOADING OVERLAY ── */
-.overlay{
-  position:fixed;inset:0;background:rgba(240,242,248,.93);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:16px;z-index:500;
-}
-.overlay.gone{display:none}
-.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .75s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.ov-title{font-size:14px;font-weight:600;color:var(--text1)}
-.ov-sub{font-size:12px;color:var(--text3)}
-.prog{width:240px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
-.prog-bar{height:100%;background:linear-gradient(90deg,var(--blue1),var(--teal1));border-radius:2px;animation:prog 1.3s ease-in-out infinite}
-@keyframes prog{0%{width:10%;margin-left:0}50%{width:55%;margin-left:20%}100%{width:10%;margin-left:90%}}
-
-/* ── TOAST ── */
-.toast{
-  position:fixed;bottom:20px;right:20px;max-width:360px;
-  background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;
-  padding:12px 16px;font-size:12.5px;color:#9f1239;
-  box-shadow:0 4px 20px rgba(0,0,0,.1);z-index:600;
-  transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;
-}
-.toast.show{transform:translateY(0);opacity:1;pointer-events:auto}
-
-/* ── TABS ── */
+/* ════════════════════════════════════════
+   5. SECONDARY NAV TABS
+   ════════════════════════════════════════ */
 .tab-nav{
-  display:flex;align-items:center;gap:2px;
-  background:var(--card);border-bottom:2px solid var(--border);
-  padding:0 24px;flex-shrink:0;
+  display:flex;align-items:center;gap:0;
+  background:#fff;
+  border-bottom:1px solid #e8edf5;
+  padding:0 24px;
+  flex-shrink:0;
+  box-shadow:0 1px 0 #f1f5f9;
 }
 .tab-btn{
   display:flex;align-items:center;gap:7px;
-  padding:11px 18px;font-size:12.5px;font-weight:600;
-  color:var(--text2);cursor:pointer;border:none;background:none;
-  border-bottom:2px solid transparent;margin-bottom:-2px;
-  transition:color .15s,border-color .15s;
+  padding:11px 18px;
+  font-size:12.5px;font-weight:500;
+  color:var(--text3);cursor:pointer;
+  border:none;background:none;
+  border-bottom:2.5px solid transparent;
+  margin-bottom:-1px;
+  transition:color .15s, border-color .15s, background .12s;
+  font-family:inherit;letter-spacing:.005em;
 }
-.tab-btn:hover{color:var(--accent)}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn:hover{
+  color:var(--text2);
+  background:linear-gradient(180deg, transparent 50%, #f8fafc 100%);
+}
+.tab-btn.active{
+  color:var(--accent);font-weight:650;
+  border-bottom-color:var(--accent);
+  background:linear-gradient(180deg, transparent 40%, #eff6ff 100%);
+}
 .tab-btn .tab-badge{
   background:#fee2e2;color:#dc2626;
-  font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;
+  font-size:9.5px;font-weight:700;
+  padding:1px 7px;border-radius:99px;
+  min-width:20px;text-align:center;letter-spacing:.01em;
 }
-.tab-btn.active .tab-badge{background:#dc2626;color:#fff}
+.tab-btn.active .tab-badge{background:#dc2626;color:#fff;box-shadow:0 1px 4px rgba(220,38,38,.3)}
 
-/* ── FLAGGED PAGE ── */
+/* ════════════════════════════════════════
+   6. ANALYSIS / SECONDARY PAGES
+   ════════════════════════════════════════ */
 .flag-page{display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden}
 .flag-page.visible{display:flex}
+
 .flag-banner{
   margin:16px 24px 0;padding:14px 20px;
   background:linear-gradient(135deg,#fef2f2,#fff5f5);
-  border:1px solid #fecdd3;border-radius:10px;
+  border:1px solid #fecdd3;border-radius:12px;
   display:flex;align-items:center;gap:12px;flex-shrink:0;
 }
 .flag-banner-icon{font-size:22px}
@@ -238,31 +527,121 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
 .flag-banner-count span{font-size:11px;font-weight:500;color:#be123c;display:block;text-align:right}
 
 .flag-wrap{
-  margin:12px 24px 16px;background:#fff;border:1px solid var(--border);border-radius:12px;
+  margin:8px 16px 12px;
+  background:#fff;border:1px solid #e8edf5;border-radius:12px;
   display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;
+  box-shadow:0 1px 4px rgba(15,23,42,.05);
 }
 .flag-scroll{overflow:auto;flex:1;min-height:0}
-.flag-scroll::-webkit-scrollbar{width:6px;height:6px}
-.flag-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.flag-scroll::-webkit-scrollbar{width:5px;height:5px}
+.flag-scroll::-webkit-scrollbar-thumb{background:#dde4f0;border-radius:3px}
 
-/* flag table */
-.flag-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
+/* Analysis / WP table — same refined style */
+.flag-wrap table{width:100%;border-collapse:collapse;font-size:11px}
 .flag-wrap thead th{
-  background:#fff;position:sticky;top:0;z-index:5;
-  padding:10px 14px;text-align:left;
-  font-size:10px;font-weight:700;color:var(--text3);
+  background:#f8fafc;position:sticky;top:0;z-index:5;
+  padding:7px 9px;text-align:left;
+  font-size:8.5px;font-weight:700;color:#64748b;
   text-transform:uppercase;letter-spacing:.06em;
-  border-bottom:2px solid var(--border);white-space:nowrap;
+  border:1px solid #e2e8f0;border-bottom:2px solid #334155;
+  white-space:nowrap;
 }
-.flag-wrap tbody tr{border-bottom:1px solid #f0f2f8;transition:background .07s}
+.flag-wrap tbody tr{transition:background .07s}
 .flag-wrap tbody tr:nth-child(even){background:#fafbff}
-.flag-wrap tbody tr:hover{background:#fff5f5}
-.flag-wrap td{padding:9px 14px;white-space:nowrap}
+.flag-wrap tbody tr:hover{background:#eff6ff}
+.flag-wrap td{padding:6px 9px;white-space:nowrap;border:1px solid #e8edf5}
 .flag-wrap td.gm-bad{font-weight:800;color:#dc2626}
 .flag-wrap td.gm-warn{font-weight:800;color:#d97706}
 .flag-wrap td.c-rev{font-weight:600;color:#1e40af;font-variant-numeric:tabular-nums}
 
-/* ── PAGE LAYOUT ── */
+/* ════════════════════════════════════════
+   7. LOADING OVERLAY
+   ════════════════════════════════════════ */
+.overlay{
+  position:fixed;inset:0;
+  background:rgba(241,245,249,.94);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;z-index:500;
+}
+.overlay.gone{display:none}
+.spinner{
+  width:36px;height:36px;
+  border:2.5px solid #e2e8f0;border-top-color:var(--accent);
+  border-radius:50%;animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ov-title{font-size:14px;font-weight:600;color:var(--text1)}
+.ov-sub{font-size:12px;color:var(--text3)}
+.prog{width:240px;height:2px;background:#e2e8f0;border-radius:2px;overflow:hidden}
+.prog-bar{
+  height:100%;
+  background:linear-gradient(90deg, var(--blue1), var(--teal1));
+  border-radius:2px;animation:prog 1.3s ease-in-out infinite;
+}
+@keyframes prog{0%{width:10%;margin-left:0}50%{width:55%;margin-left:20%}100%{width:10%;margin-left:90%}}
+
+/* ════════════════════════════════════════
+   8. TOAST
+   ════════════════════════════════════════ */
+.toast{
+  position:fixed;bottom:20px;right:20px;max-width:360px;
+  background:#fff;border:1px solid #fecdd3;border-radius:10px;
+  padding:12px 16px;font-size:12.5px;color:#9f1239;
+  box-shadow:0 8px 24px rgba(0,0,0,.1),0 2px 6px rgba(0,0,0,.06);
+  z-index:600;
+  transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;
+}
+.toast.show{transform:translateY(0);opacity:1;pointer-events:auto}
+
+/* ════════════════════════════════════════
+   8b. WP BENCHMARK TABLE — premium bordered
+   ════════════════════════════════════════ */
+#wp-table{width:100%;border-collapse:collapse;font-size:11px}
+
+/* Universal cell border */
+#wp-table th,#wp-table td{border:1px solid #e2e8f0}
+
+/* Group band row */
+#wp-table thead tr.grp-row th{
+  padding:4px 8px;font-size:7.5px;font-weight:800;
+  letter-spacing:.13em;text-transform:uppercase;line-height:1;
+  border-bottom:0;
+}
+/* Column label row */
+#wp-table thead tr.col-row th{
+  padding:6px 8px;font-size:8px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;line-height:1.3;
+  border-top:0;border-bottom:2px solid #334155;
+}
+
+/* No sticky — SSE ID scrolls normally */
+#wp-table .col-s0{}
+
+/* WP benchmark cells */
+#wp-table td.wp-cell{
+  text-align:center;padding:5px 7px;vertical-align:middle;
+  min-width:100px;border:1px solid #c7d2fe;
+}
+#wp-table td.wp-over{
+  background:rgba(254,226,226,.7)!important;
+  border:1px solid #fca5a5!important;
+  border-left:2px solid #ef4444!important;
+}
+#wp-table td.wp-ok-pos{background:rgba(240,253,244,.55)}
+
+/* Finance cells */
+#wp-table td.fin-cell{
+  text-align:right;padding:5px 9px;font-variant-numeric:tabular-nums;
+  font-weight:600;color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;
+}
+
+/* Result cells */
+#wp-table td.res-cell{border:1px solid #86efac}
+
+/* ════════════════════════════════════════
+   9. PAGE LAYOUT (structural — unchanged)
+   ════════════════════════════════════════ */
 .page{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .main-view{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
 .main-view.hidden{display:none}
@@ -318,12 +697,11 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
     <button class="tab-btn active" id="tab-main" onclick="switchTab('main')">
       📊 SSE ID Analysis
     </button>
-    <button class="tab-btn" id="tab-flagged" onclick="switchTab('flagged')">
-      🚨 Flagged Projects
-      <span class="tab-badge" id="flag-badge">0</span>
-    </button>
-    <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">
+<button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">
       📈 Analysis
+    </button>
+    <button class="tab-btn" id="tab-wp" onclick="switchTab('wp')">
+      ⚡ ₹/Wp Benchmark
     </button>
   </div>
 
@@ -407,40 +785,6 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
 
   </div><!-- end .main-view -->
 
-  <!-- Flagged Projects Page -->
-  <div class="flag-page" id="flag-page">
-    <div class="flag-banner">
-      <div class="flag-banner-icon">🚨</div>
-      <div class="flag-banner-text">
-        <h3>Projects with Low GM%</h3>
-        <p>Projects below 37% gross margin — review COGS and pricing to protect profitability</p>
-      </div>
-      <div class="flag-banner-count">
-        <span id="flag-count-num">0</span>
-        <span>flagged projects</span>
-      </div>
-    </div>
-    <!-- Flagged filters -->
-    <div class="fbar" style="border-top:none;border-bottom:1px solid var(--border);margin:8px 24px 0;border-radius:10px 10px 0 0">
-      <span class="fbar-label">Filters</span>
-      <input type="text" class="fi" id="ff-search" placeholder="Search SSE ID, customer, city…" style="min-width:200px" oninput="renderFlagged()"/>
-      <div class="fsep"></div>
-      <select class="fs" id="ff-city" onchange="renderFlagged()"><option value="">All Cities</option></select>
-      <select class="fs" id="ff-month" onchange="renderFlagged()"><option value="">All Months</option></select>
-      <select class="fs" id="ff-offertype" onchange="renderFlagged()"><option value="">All Offer Types</option></select>
-      <span class="fclr" onclick="clearFlagFilters()">✕ Clear</span>
-      <span class="fresults" id="ff-results"></span>
-    </div>
-    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
-      <div class="flag-scroll">
-        <table>
-          <thead id="flag-head"></thead>
-          <tbody id="flag-body"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <!-- Analysis Page -->
   <div class="flag-page" id="analysis-page">
     <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
@@ -458,6 +802,43 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
         <table>
           <thead id="analysis-head"></thead>
           <tbody id="analysis-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ₹/Wp Benchmark Page -->
+  <div class="flag-page" id="wp-page">
+    <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
+      <span class="fbar-label">Filters</span>
+      <input type="text" class="fi" id="wf-search" placeholder="Search SSE ID, customer, city…" style="min-width:180px" oninput="renderWpBenchmark()"/>
+      <div class="fsep"></div>
+      <select class="fs" id="wf-month" onchange="renderWpBenchmark()"><option value="">All Months</option></select>
+      <select class="fs" id="wf-city"  onchange="renderWpBenchmark()"><option value="">All Cities</option></select>
+      <span class="fclr" onclick="clearWpFilters()">✕ Clear</span>
+      <span class="fresults" id="wf-results"></span>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <button id="wp-toggle" onclick="toggleWpGm()" style="
+          display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;
+          border:1.5px solid #fecdd3;background:#fff;color:#dc2626;font-size:12px;
+          font-weight:600;cursor:pointer;transition:all .15s" title="Toggle between all projects and GM% < 38%">
+          <span id="wp-toggle-icon">🔴</span> <span id="wp-toggle-label">GM% &lt; 38% only</span>
+        </button>
+        <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600">
+          <span style="display:flex;align-items:center;gap:4px;background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:99px;border:1px solid #fecaca">
+            <span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block"></span> Over tolerance
+          </span>
+          <span style="display:flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;border:1px solid #86efac">
+            <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block"></span> Within tolerance
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
+      <div class="flag-scroll">
+        <table id="wp-table">
+          <thead id="wp-head"></thead>
+          <tbody id="wp-body"></tbody>
         </table>
       </div>
     </div>
@@ -908,156 +1289,35 @@ function bookBadge(v){
 // ── Tab navigation ──
 function switchTab(tab){
   const mainView    = document.getElementById('main-view');
-  const flagPage    = document.getElementById('flag-page');
   const analysisPage= document.getElementById('analysis-page');
+  const wpPage      = document.getElementById('wp-page');
   const tabMain     = document.getElementById('tab-main');
-  const tabFlagged  = document.getElementById('tab-flagged');
   const tabAnalysis = document.getElementById('tab-analysis');
+  const tabWp       = document.getElementById('tab-wp');
 
   // Hide all
   mainView.classList.add('hidden');
-  flagPage.classList.remove('visible');
   analysisPage.classList.remove('visible');
-  [tabMain, tabFlagged, tabAnalysis].forEach(b => b.classList.remove('active'));
+  wpPage.classList.remove('visible');
+  [tabMain, tabAnalysis, tabWp].forEach(b => b.classList.remove('active'));
 
   if(tab === 'main'){
     mainView.classList.remove('hidden');
     tabMain.classList.add('active');
-  } else if(tab === 'flagged'){
-    flagPage.classList.add('visible');
-    tabFlagged.classList.add('active');
-    renderFlagged();
   } else if(tab === 'analysis'){
     analysisPage.classList.add('visible');
     tabAnalysis.classList.add('active');
     renderAnalysis();
-  }
-}
-
-// ── Flagged Projects ──
-const FLAG_COLS = [
-  'SSE ID',
-  'Installation Completion Date',
-  'Customer Name',
-  'City',
-  'Project Size (kW)',
-  'Offer Type',
-  'Final Output',      // rendered as "Installed Revenue"
-  'Installed COGS',
-  'GM %'
-];
-
-function buildFlagHeader(){
-  const tr = document.createElement('tr');
-  FLAG_COLS.forEach(col => {
-    const th = document.createElement('th');
-    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col;
-    tr.appendChild(th);
-  });
-  document.getElementById('flag-head').innerHTML = '';
-  document.getElementById('flag-head').appendChild(tr);
-}
-
-function buildFlagFilters(){
-  // Populate dropdowns from flagged set only
-  const base = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37);
-  const cities   = [...new Set(base.map(r=>(r['City']||'').trim()).filter(Boolean))].sort();
-  const months   = [...new Set(base.map(r=>(r['Month']||'').trim()).filter(Boolean))].sort();
-  const offers   = [...new Set(base.map(r=>(r['Offer Type']||'').trim()).filter(Boolean))].sort();
-  const popSel = (id, vals) => {
-    const sel = document.getElementById(id);
-    const ph  = sel.options[0].text;
-    sel.innerHTML = '<option value="">'+ph+'</option>';
-    vals.forEach(v=>{ const o=document.createElement('option'); o.value=o.textContent=v; sel.appendChild(o); });
-  };
-  popSel('ff-city',      cities);
-  popSel('ff-month',     months);
-  popSel('ff-offertype', offers);
-}
-
-function clearFlagFilters(){
-  document.getElementById('ff-search').value = '';
-  ['ff-city','ff-month','ff-offertype'].forEach(id => document.getElementById(id).value = '');
-  renderFlagged();
-}
-
-function renderFlagged(){
-  const q  = (document.getElementById('ff-search')?.value||'').toLowerCase();
-  const cy = document.getElementById('ff-city')?.value||'';
-  const mo = document.getElementById('ff-month')?.value||'';
-  const ot = document.getElementById('ff-offertype')?.value||'';
-
-  let flagged = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37);
-  if(cy) flagged = flagged.filter(r => r['City']===cy);
-  if(mo) flagged = flagged.filter(r => r['Month']===mo);
-  if(ot) flagged = flagged.filter(r => r['Offer Type']===ot);
-  if(q)  flagged = flagged.filter(r => {
-    const h = [r['SSE ID'],r['Customer Name'],r['City'],r['State']].join(' ').toLowerCase();
-    return h.includes(q);
-  });
-
-  // Sort worst GM% first
-  flagged.sort((a,b) => (a['GM %']||0) - (b['GM %']||0));
-  const el = document.getElementById('ff-results');
-  if(el) el.textContent = flagged.length.toLocaleString()+' projects';
-
-  const frag = document.createDocumentFragment();
-  for(const row of flagged){
-    const tr = document.createElement('tr');
-    for(const col of FLAG_COLS){
-      const td = document.createElement('td');
-      const raw = row[col];
-      const v = (raw == null ? '' : String(raw)).trim();
-      if(col === 'SSE ID'){
-        td.className = 'c-sse'; td.textContent = v;
-      } else if(col === 'Final Output'){
-        const n = parseFloat(v)||0;
-        td.className = 'c-rev';
-        td.textContent = n ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
-      } else if(col === 'Installed COGS'){
-        const n = Number(v)||0;
-        td.className = 'c-rev';
-        td.textContent = n ? '₹'+n.toLocaleString('en-IN') : '—';
-      } else if(col === 'GM %'){
-        const n = parseFloat(v);
-        if(isNaN(n)||v===''){td.textContent='—';}
-        else {
-          const pct = (n*100).toFixed(1)+'%';
-          td.className = n < 0.20 ? 'gm-bad' : 'gm-warn';
-          td.textContent = pct;
-        }
-      } else if(col === 'Project Size (kW)'){
-        const n = parseFloat(v)||0;
-        td.textContent = n ? n.toFixed(2)+' kW' : v;
-      } else {
-        td.textContent = v; td.title = v;
-      }
-      tr.appendChild(td);
-    }
-    frag.appendChild(tr);
-  }
-
-  const tb = document.getElementById('flag-body');
-  tb.innerHTML = '';
-  if(flagged.length === 0){
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = FLAG_COLS.length;
-    td.style.cssText = 'text-align:center;padding:48px;color:#94a3b8;font-size:13px';
-    td.textContent = '🎉 No projects below 37% GM — looking good!';
-    tr.appendChild(td); tb.appendChild(tr);
-  } else {
-    tb.appendChild(frag);
+  } else if(tab === 'wp'){
+    wpPage.classList.add('visible');
+    tabWp.classList.add('active');
+    renderWpBenchmark();
   }
 }
 
 function updateFlagBadge(){
-  const count = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37).length;
-  document.getElementById('flag-badge').textContent = count;
-  document.getElementById('flag-count-num').textContent = count;
-  buildFlagHeader();
-  buildFlagFilters();
   buildAnalysisFilters();
+  buildWpFilters();
 }
 
 // ── Analysis Tab ──
@@ -1083,7 +1343,7 @@ function buildAnalysisHeader(){
   const tr = document.createElement('tr');
   ANALYSIS_COLS.forEach(col => {
     const th = document.createElement('th');
-    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col;
+    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col === 'Kitts' ? 'Kitts-0071' : col;
     if(col === 'Kitts')          th.style.cssText = 'background:#fff7ed;color:#c2410c;border-left:2px solid #fed7aa';
     if(col === 'Installed Kitts') th.style.cssText = 'background:#f5f3ff;color:#7c3aed;border-left:2px solid #ddd6fe';
     tr.appendChild(th);
@@ -1184,6 +1444,350 @@ function renderAnalysis(){
     td.colSpan = ANALYSIS_COLS.length;
     td.style.cssText = 'text-align:center;padding:48px;color:#94a3b8;font-size:13px';
     td.textContent = 'No records match the current filters.';
+    tr.appendChild(td); tb.appendChild(tr);
+  } else {
+    tb.appendChild(frag);
+  }
+}
+
+// ── ₹/Wp Benchmark Tab ──
+const WP_GROUPS = {
+  'Module':   ['COGS: Module'],
+  'Inverter': ['COGS: Inverter'],
+  'MMS':      ['COGS: Prefab MMS','COGS: Tin Shed MMS','COGS: Welded MMS'],
+  'Cable':    ['COGS: Cables'],
+  'Others':   ['COGS: Conduit Pipe','COGS: Electrical BoS','COGS: Earthing & LA',
+               'COGS: SS NBW','COGS: I&C Accessories','COGS: Junction Box',
+               'COGS: Safety','COGS: Civil Work','COGS: Data Logger',
+               'COGS: Ladder','COGS: Welcome Kit & Board','COGS: Module LC',
+               'COGS: Metering','COGS: I&C KIT']
+};
+const WP_GROUP_NAMES = Object.keys(WP_GROUPS);
+const WP_TOLERANCE = { Module: 0.01, Inverter: 0.04, MMS: 0.04, Cable: 0.05, Others: 0.04 };
+const MON_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+let monthBenchmarks = new Map(); // 'YYYYMM' → { Module, Inverter, MMS, Cable, Others }
+let wpMonthOrder = [];
+let wpGmFilter = false; // false = show all, true = GM% < 38% only
+
+function toggleWpGm(){
+  wpGmFilter = !wpGmFilter;
+  const btn = document.getElementById('wp-toggle');
+  const lbl = document.getElementById('wp-toggle-label');
+  const ico = document.getElementById('wp-toggle-icon');
+  if(wpGmFilter){
+    btn.style.background='#dc2626'; btn.style.color='#fff'; btn.style.borderColor='#dc2626';
+    ico.textContent='🔴'; lbl.textContent='GM% < 38% only';
+  } else {
+    btn.style.background='#fff'; btn.style.color='#dc2626'; btn.style.borderColor='#fecdd3';
+    ico.textContent='📊'; lbl.textContent='Show all projects';
+  }
+  renderWpBenchmark();
+}
+
+function buildMonthKey(row){
+  const yr  = parseInt(row['Year of'])||0;
+  const mon = parseInt(row['Installation Month No'])||0;
+  return (yr && mon) ? String(yr*100+mon) : '';
+}
+function prevMonthKey(key){
+  const yr=parseInt(key.slice(0,4)), mon=parseInt(key.slice(4));
+  return mon===1 ? String((yr-1)*100+12) : String(yr*100+(mon-1));
+}
+function keyLabel(key){
+  const m=parseInt(key.slice(4)); return (MON_NAMES[m]||'')+' '+key.slice(0,4);
+}
+
+function computeMonthlyBenchmarks(){
+  const byKey = new Map();
+  for(const row of allRows){
+    const key = buildMonthKey(row);
+    if(!key) continue;
+    if(!byKey.has(key)) byKey.set(key,[]);
+    byKey.get(key).push(row);
+  }
+  wpMonthOrder = [...byKey.keys()].sort((a,b)=>Number(a)-Number(b));
+  monthBenchmarks = new Map();
+  for(const [key,rows] of byKey){
+    const totalWp = rows.reduce((s,r)=>s+(parseFloat(r['Project Size (kW)'])||0)*1000,0);
+    const bench = {_wp:totalWp,_count:rows.length};
+    for(const [grp,cols] of Object.entries(WP_GROUPS)){
+      const tot = rows.reduce((s,r)=>s+cols.reduce((cs,c)=>cs+(Number(r[c])||0),0),0);
+      bench[grp] = totalWp>0 ? tot/totalWp : 0;
+    }
+    monthBenchmarks.set(key,bench);
+  }
+}
+
+function buildWpFilters(){
+  computeMonthlyBenchmarks();
+  // Month dropdown — only months that have a prev month available
+  const validKeys = wpMonthOrder.filter(k=>monthBenchmarks.has(prevMonthKey(k)));
+  const mSel = document.getElementById('wf-month');
+  if(mSel){
+    mSel.innerHTML='<option value="">All Months</option>';
+    validKeys.forEach(k=>{
+      const o=document.createElement('option'); o.value=k; o.textContent=keyLabel(k); mSel.appendChild(o);
+    });
+  }
+  // City dropdown
+  const cities=[...new Set(allRows.map(r=>(r['City']||'').trim()).filter(Boolean))].sort();
+  const cSel=document.getElementById('wf-city');
+  if(cSel){
+    cSel.innerHTML='<option value="">All Cities</option>';
+    cities.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;cSel.appendChild(o);});
+  }
+  buildWpHeader();
+}
+
+function buildWpHeader(){
+  const h=document.getElementById('wp-head'); h.innerHTML='';
+  const N=WP_GROUP_NAMES.length;
+
+  // ── ROW 1 group bands  (1 + 4 + 2 + 2 + N + 2 = 11+N cols) ──
+  const tr1=document.createElement('tr'); tr1.className='grp-row';
+  [
+    {label:'',      cols:1, bg:'#f8fafc', cl:'#334155', bl:''},
+    {label:'Project Info', cols:4, bg:'#f1f5f9', cl:'#475569', bl:'2px solid #94a3b8'},
+    {label:'Period',       cols:2, bg:'#f1f5f9', cl:'#475569', bl:'2px solid #94a3b8'},
+    {label:'Financials',   cols:2, bg:'#dbeafe', cl:'#1e40af', bl:'2px solid #3b82f6'},
+    {label:'₹/Wp Benchmark', cols:N, bg:'#e0e7ff', cl:'#3730a3', bl:'2px solid #6366f1', fs:'9.5px'},
+    {label:'Result',       cols:2, bg:'#d1fae5', cl:'#065f46', bl:'2px solid #10b981'},
+  ].forEach(g=>{
+    const th=document.createElement('th');
+    th.colSpan=g.cols; th.textContent=g.label;
+    th.style.cssText='background:'+g.bg+';color:'+g.cl+';text-align:center;font-weight:800;'
+      +(g.bl?'border-left:'+g.bl+';':'')
+      +(g.fs?'font-size:'+g.fs+';':'');
+    tr1.appendChild(th);
+  });
+  h.appendChild(tr1);
+
+  // ── ROW 2 column labels ──
+  const tr2=document.createElement('tr'); tr2.className='col-row';
+
+  // SSE ID
+  const sseH=document.createElement('th');
+  sseH.textContent='SSE ID';
+  sseH.style.cssText='background:#f8fafc;color:#334155;min-width:90px';
+  tr2.appendChild(sseH);
+
+  // Project Info (4 cols)
+  [{l:'Customer',w:'108px'},{l:'City',w:'68px'},{l:'Size kW',w:'60px',r:true},{l:'Offer',w:'76px'}]
+  .forEach((c,i)=>{
+    const th=document.createElement('th');
+    th.textContent=c.l;
+    th.style.cssText='background:#f1f5f9;color:#475569;min-width:'+c.w
+      +(c.r?';text-align:right':'')
+      +(i===0?';border-left:2px solid #94a3b8':'');
+    tr2.appendChild(th);
+  });
+
+  // Period (2 cols) — same style as Project Info
+  [{l:'Month',w:'74px'},{l:'Prev',w:'72px',dim:true}].forEach((c,i)=>{
+    const th=document.createElement('th');
+    th.textContent=c.l;
+    th.style.cssText='background:#f1f5f9;color:'+(c.dim?'#94a3b8':'#475569')+';min-width:'+c.w
+      +(i===0?';border-left:2px solid #94a3b8':'');
+    tr2.appendChild(th);
+  });
+
+  // Financials (2 cols)
+  [{l:'Revenue',w:'112px'},{l:'COGS',w:'112px'}].forEach((c,i)=>{
+    const th=document.createElement('th');
+    th.textContent=c.l;
+    th.style.cssText='background:#dbeafe;color:#1e40af;min-width:'+c.w+';text-align:right'
+      +(i===0?';border-left:2px solid #3b82f6':'');
+    tr2.appendChild(th);
+  });
+
+  // ₹/Wp group columns
+  WP_GROUP_NAMES.forEach((name,i)=>{
+    const th=document.createElement('th');
+    const tol=WP_TOLERANCE[name];
+    th.innerHTML=name+'<br><span style="font-size:7px;font-weight:500;opacity:.65;text-transform:none;letter-spacing:0">tol '+(tol*100).toFixed(0)+'%</span>';
+    th.style.cssText='background:#e0e7ff;color:#3730a3;text-align:center;min-width:100px;padding:5px 6px;cursor:default'
+      +(i===0?';border-left:2px solid #6366f1':'');
+    tr2.appendChild(th);
+  });
+
+  // Result (GM% + Issues)
+  [{l:'GM %',w:'65px'},{l:'Issues',w:'80px'}].forEach((c,i)=>{
+    const th=document.createElement('th');
+    th.textContent=c.l;
+    th.style.cssText='background:#d1fae5;color:#065f46;text-align:center;min-width:'+c.w
+      +(i===0?';border-left:2px solid #10b981':'');
+    tr2.appendChild(th);
+  });
+
+  h.appendChild(tr2);
+}
+
+function clearWpFilters(){
+  document.getElementById('wf-search').value='';
+  ['wf-month','wf-city'].forEach(id=>document.getElementById(id).value='');
+  renderWpBenchmark();
+}
+
+function renderWpBenchmark(){
+  const filterKey=(document.getElementById('wf-month')?.value)||'';
+  const filterCity=(document.getElementById('wf-city')?.value)||'';
+  const q=(document.getElementById('wf-search')?.value||'').toLowerCase();
+
+  let rows=allRows.filter(r=>{
+    const key=buildMonthKey(r);
+    if(!key||!monthBenchmarks.has(prevMonthKey(key))) return false;
+    if(filterKey&&key!==filterKey) return false;
+    if(filterCity&&r['City']!==filterCity) return false;
+    if(wpGmFilter && !(r['GM %']!==null && r['GM %']<0.38)) return false;
+    if(q){
+      const h=[r['SSE ID'],r['Customer Name'],r['City']].join(' ').toLowerCase();
+      if(!h.includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Sort: newest month first, then by most categories over benchmark
+  rows.sort((a,b)=>{
+    const ka=buildMonthKey(a),kb=buildMonthKey(b);
+    return Number(kb)-Number(ka);
+  });
+
+  const el=document.getElementById('wf-results');
+  if(el) el.textContent=rows.length.toLocaleString()+' projects';
+
+  buildWpHeader();
+  const frag=document.createDocumentFragment();
+
+  for(const row of rows){
+    const key=buildMonthKey(row);
+    const prev=prevMonthKey(key);
+    const bench=monthBenchmarks.get(prev);
+    const kw=parseFloat(row['Project Size (kW)'])||0;
+    const wp=kw*1000;
+    const gm=row['GM %'];
+    const gmLow=(gm!==null&&gm<0.38);
+    const tr=document.createElement('tr');
+    if(gmLow) tr.style.cssText='background:#fff0f0';
+    let issueCount=0;
+
+    const addTd=(text,style='',cls='')=>{
+      const td=document.createElement('td');
+      td.textContent=text;
+      if(style) td.style.cssText=style;
+      if(cls) td.className=cls;
+      tr.appendChild(td); return td;
+    };
+
+    // SSE ID
+    const sseTd=document.createElement('td');
+    sseTd.className='c-sse';
+    sseTd.style.cssText='background:'+(gmLow?'#fff5f5':'#fff')+';border:1px solid #e2e8f0';
+    sseTd.textContent=row['SSE ID']||'—';
+    tr.appendChild(sseTd);
+
+    // Project Info (4 cells) — light gray section
+    const piBase='background:#fafbfc;border:1px solid #e2e8f0;';
+    addTd((row['Customer Name']||'—').slice(0,20), piBase+'font-size:11px;border-left:2px solid #cbd5e1');
+    addTd(row['City']||'—',                        piBase+'font-size:11px;color:#475569');
+    addTd(kw?kw.toFixed(1):'—',                    piBase+'text-align:right;font-variant-numeric:tabular-nums;color:#334155');
+
+    // Offer badge
+    const offerTd=document.createElement('td');
+    const ot=row['Offer Type']||'—';
+    const obg=ot==='GoodZero'?'#dbeafe':ot==='PreGoodZero'?'#ede9fe':ot==='Cash'?'#d1fae5':ot==='EMI'?'#fef3c7':'#f1f5f9';
+    const ocl=ot==='GoodZero'?'#1e40af':ot==='PreGoodZero'?'#5b21b6':ot==='Cash'?'#065f46':ot==='EMI'?'#92400e':'#475569';
+    offerTd.innerHTML='<span style="font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:99px;background:'+obg+';color:'+ocl+'">'+ot+'</span>';
+    offerTd.style.cssText=piBase+'padding:5px 7px';
+    tr.appendChild(offerTd);
+
+    // Period (2 cells) — same as Project Info
+    const perBase='background:#fafbfc;border:1px solid #e2e8f0;';
+    addTd(keyLabel(key),        perBase+'font-weight:600;color:#334155;font-size:11px;border-left:2px solid #94a3b8');
+    addTd('← '+keyLabel(prev), perBase+'color:#94a3b8;font-size:10px');
+
+    // Financials (2 cells) — blue-tinted
+    const rev=parseFloat(row['Final Output'])||0;
+    const revTd=document.createElement('td');
+    revTd.className='fin-cell';
+    revTd.style.borderLeft='2px solid #3b82f6';
+    revTd.textContent=rev?'₹'+Math.round(rev).toLocaleString('en-IN'):'—';
+    tr.appendChild(revTd);
+
+    const cogs=Number(row['Installed COGS'])||0;
+    const cogsTd=document.createElement('td');
+    cogsTd.className='fin-cell';
+    cogsTd.textContent=cogs?'₹'+cogs.toLocaleString('en-IN'):'—';
+    tr.appendChild(cogsTd);
+
+    // one cell per COGS group
+    let wpFirst=true;
+    for(const grp of WP_GROUP_NAMES){
+      const cols=WP_GROUPS[grp];
+      const projectTotal=cols.reduce((s,c)=>s+(Number(row[c])||0),0);
+      const actual=wp>0?projectTotal/wp:0;
+      const benchmark=bench[grp]||0;
+      const delta=actual-benchmark;
+      const tolPct=WP_TOLERANCE[grp]||0;
+      // over tolerance only if increase exceeds the allowed % above benchmark
+      const changePct=benchmark>0?(actual-benchmark)/benchmark:0;
+      const over=changePct>tolPct;
+      if(over) issueCount++;
+
+      const color=over?'#dc2626':'#16a34a';
+      const arrow=delta>0?'▲':'▼';
+      const absPct=Math.abs(changePct*100).toFixed(1)+'%';
+      const badgeBg=over?'#fee2e2':'#dcfce7';
+      const badgeColor=over?'#dc2626':'#15803d';
+
+      const td=document.createElement('td');
+      td.className='wp-cell'+(over?' wp-over':changePct>0?' wp-ok-pos':' wp-ok-neg');
+      if(wpFirst){td.style.borderLeft='2px solid #6366f1';wpFirst=false;}
+      // Main value row: big ₹ value + % badge side by side
+      td.innerHTML=
+        '<div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:3px">'
+          +'<span style="font-weight:700;font-size:12.5px;color:'+color+';font-variant-numeric:tabular-nums;letter-spacing:-.01em">₹'+actual.toFixed(2)+'</span>'
+          +'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:'+badgeBg+';color:'+badgeColor+'">'+arrow+absPct+'</span>'
+        +'</div>'
+        +'<div style="font-size:9px;color:#94a3b8;font-variant-numeric:tabular-nums">prev ₹'+benchmark.toFixed(2)+'</div>';
+      tr.appendChild(td);
+    }
+
+    // GM% — result section
+    const gmTd=document.createElement('td');
+    gmTd.className='res-cell';
+    gmTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4;border-left:2px solid #10b981';
+    if(gm===null||gm===undefined){
+      gmTd.innerHTML='<span style="color:#94a3b8;font-size:11px">—</span>';
+    } else {
+      const pct=(gm*100).toFixed(1)+'%';
+      const [bg,cl,brd]=gm>=0.38?['#dcfce7','#15803d','#86efac']:gm>=0.20?['#fef3c7','#92400e','#fde68a']:['#fee2e2','#dc2626','#fca5a5'];
+      gmTd.innerHTML='<span style="font-weight:800;font-size:12px;color:'+cl+';background:'+bg+';padding:3px 10px;border-radius:99px;display:inline-block;border:1px solid '+brd+'">'+pct+'</span>';
+    }
+    tr.appendChild(gmTd);
+
+    // Issues badge
+    const statusTd=document.createElement('td');
+    statusTd.className='res-cell';
+    statusTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4';
+    if(issueCount===0){
+      statusTd.innerHTML='<span style="color:#065f46;font-weight:700;font-size:10.5px;background:#d1fae5;padding:3px 11px;border-radius:99px;border:1px solid #6ee7b7;display:inline-block">OK</span>';
+    } else {
+      const [cl,bg,brd]=issueCount>=4?['#7f1d1d','#fee2e2','#fca5a5']:['#991b1b','#fef2f2','#fecaca'];
+      statusTd.innerHTML='<span style="background:'+bg+';color:'+cl+';font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid '+brd+';display:inline-block">'+issueCount+'/'+WP_GROUP_NAMES.length+'</span>';
+    }
+    tr.appendChild(statusTd);
+    frag.appendChild(tr);
+  }
+
+  const tb=document.getElementById('wp-body');
+  tb.innerHTML='';
+  if(rows.length===0){
+    const tr=document.createElement('tr');
+    const td=document.createElement('td');
+    td.colSpan=7+WP_GROUP_NAMES.length+4;
+    td.style.cssText='text-align:center;padding:48px;color:#94a3b8;font-size:13px';
+    td.textContent='No projects found — only months with prior month data are shown.';
     tr.appendChild(td); tb.appendChild(tr);
   } else {
     tb.appendChild(frag);
