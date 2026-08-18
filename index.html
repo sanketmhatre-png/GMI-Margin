@@ -865,7 +865,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
     <div id="wp-summary-wrap" style="margin:12px 24px 0;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
       <div style="padding:8px 14px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);display:flex;align-items:center;gap:8px">
         <span style="font-size:11px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#e0e7ff">GMI Summary</span>
-        <span style="font-size:9.5px;color:#a5b4fc;font-weight:500">Flash IDS = GM% &lt; 38%</span>
+        <span style="font-size:9.5px;color:#a5b4fc;font-weight:500">Flash IDS = GM% &lt; 38% · Blank IDS = any COGS = ₹0 · Click a row to filter ↓</span>
       </div>
       <table id="wp-summary-table" style="width:100%;border-collapse:collapse;font-size:11.5px">
         <thead>
@@ -890,6 +890,29 @@ td:has(+ td.c-cogs):not(.c-cogs){}
           <tbody id="wp-body"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- MMS Drill-down Modal -->
+  <div id="mms-modal" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.55);backdrop-filter:blur(3px)" onclick="if(event.target===this)closeMmsModal()">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.25);width:min(92vw,980px);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+      <!-- Modal header -->
+      <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:12px;background:#f8fafc;border-radius:14px 14px 0 0">
+        <div style="flex:1">
+          <div id="mms-modal-title" style="font-weight:700;font-size:15px;color:#0f172a"></div>
+          <div id="mms-modal-sub"   style="font-size:11px;color:#64748b;margin-top:2px"></div>
+        </div>
+        <button onclick="closeMmsModal()" style="padding:6px 14px;border-radius:7px;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-size:12px;cursor:pointer">✕ Close</button>
+      </div>
+      <!-- Table -->
+      <div style="overflow:auto;flex:1">
+        <table id="mms-modal-table" style="border-collapse:collapse;width:100%;font-size:12px">
+          <thead id="mms-modal-head" style="position:sticky;top:0;z-index:2"></thead>
+          <tbody id="mms-modal-body"></tbody>
+        </table>
+      </div>
+      <!-- Footer -->
+      <div id="mms-modal-footer" style="padding:10px 20px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;background:#f8fafc;border-radius:0 0 14px 14px"></div>
     </div>
   </div>
 
@@ -962,6 +985,7 @@ const COGS_COLS = new Set(COLS.filter(c => c.startsWith('COGS:')));
 const COGS_AMT_COLS = COLS.filter(c => c.startsWith('COGS:'));
 
 let allRows=[], filtered=[], sortCol=null, sortDir=1;
+const rawItemsMap = new Map();  // sseid → raw DN line items
 
 // ── Virtual pagination state ──
 const PAGE_SIZE = 300;    // rows rendered initially
@@ -1270,6 +1294,116 @@ function renderAtRisk(rows){
 }
 
 // ── Main render orchestrator ──
+// ════════════════════════════════════════
+//  MMS DRILL-DOWN MODAL
+// ════════════════════════════════════════
+const MMS_DRILL_COLS = [
+  {label:'SSE ID',           key:'SSE ID'},
+  {label:'Capacity (kW)',    key:'_kw'},
+  {label:'Item Category',    key:'item_category'},
+  {label:'Item Subcategory', key:'item_subcategory'},
+  {label:'Item Code',        key:'item_code'},
+  {label:'Item Name',        key:'item_name'},
+  {label:'Qty',              key:'qty'},
+  {label:'UOM',              key:'uom'},
+  {label:'Rate (₹)',         key:'rate'},
+  {label:'Amount (₹)',       key:'amount'},
+];
+
+const _MMS_CATS_DRILL    = new Set(['Tin Shed MMS','Welded MMS','MMS','Prefab MMS']);
+const _PURLIN_SC_DRILL   = new Set(['Purlins J Series','Purlin Gen 2']);
+const _RAFTER_SC_DRILL   = new Set(['Rafter Gen 2','Rafter 3P Jointer','Rafters J Series','Rafter']);
+const _COLUMN_SC_DRILL   = new Set(['Column','Column Gen 2']);
+
+function openMmsModal(sseId, groupKey, kw){
+  const items = rawItemsMap.get(sseId);
+  if(!items || !items.length) return;
+
+  const fld = (r,...keys) => { for(const k of keys){const v=r[k];if(v!=null&&v!=='')return v;} return ''; };
+  const cat    = r => (fld(r,'custom_item_category','item_category','Item Category')||'').trim();
+  const subcat = r => (fld(r,'item_subcategory','Item Subcategory','Item Sub Category')||'').trim();
+  const code   = r => (fld(r,'item_code','Item Code')||'').trim();
+  const iname  = r => (fld(r,'item_name','Item Name')||'').trim();
+  const iqty   = r => fld(r,'qty','Qty','quantity','Quantity')||'';
+  const iuom   = r => fld(r,'uom','UOM','unit_of_measure','Unit')||'';
+  const irate  = r => fld(r,'rate','Rate')||'';
+  const iamt   = r => fld(r,'amount','Amount')||'';
+
+  // Filter by group
+  const rows = items.filter(r => {
+    const c = cat(r), sc = subcat(r);
+    if(!_MMS_CATS_DRILL.has(c)) return false;
+    if(groupKey === 'purlin') return _PURLIN_SC_DRILL.has(sc);
+    if(groupKey === 'rafter') return _RAFTER_SC_DRILL.has(sc);
+    if(groupKey === 'column') return _COLUMN_SC_DRILL.has(sc);
+    if(groupKey === 'others') return !_PURLIN_SC_DRILL.has(sc) && !_RAFTER_SC_DRILL.has(sc) && !_COLUMN_SC_DRILL.has(sc);
+    return false;
+  });
+
+  // Build modal header/title
+  const groupLabels = {purlin:'Purlin J',rafter:'Rafter',column:'Column',others:'Others'};
+  document.getElementById('mms-modal-title').textContent = `${sseId} — MMS: ${groupLabels[groupKey]}`;
+  document.getElementById('mms-modal-sub').textContent   = `${kw} kW · ${rows.length} line item${rows.length!==1?'s':''}`;
+
+  // Build table header
+  const thead = document.getElementById('mms-modal-head');
+  thead.innerHTML = '';
+  const htr = document.createElement('tr');
+  MMS_DRILL_COLS.forEach(c => {
+    const th = document.createElement('th');
+    th.textContent = c.label;
+    th.style.cssText = 'padding:8px 12px;background:#f1f5f9;font-size:11px;font-weight:700;color:#475569;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap';
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+
+  // Build table body
+  const tbody = document.getElementById('mms-modal-body');
+  tbody.innerHTML = '';
+  let totalQty=0, totalAmt=0;
+
+  rows.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    tr.style.background = i%2===0 ? '#fff' : '#fafbff';
+    MMS_DRILL_COLS.forEach(c => {
+      const td = document.createElement('td');
+      td.style.cssText = 'padding:7px 12px;border-bottom:1px solid #f1f5f9;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis';
+      let val = '';
+      if(c.key === 'SSE ID')           val = sseId;
+      else if(c.key === '_kw')         val = kw + ' kW';
+      else if(c.key === 'item_category')    { val = cat(r);   td.style.color='#475569'; }
+      else if(c.key === 'item_subcategory') { val = subcat(r);td.style.color='#6366f1';td.style.fontWeight='600'; }
+      else if(c.key === 'item_code')   { val = code(r); td.style.fontFamily='monospace';td.style.color='#0891b2'; }
+      else if(c.key === 'item_name')   { val = iname(r);td.title=val; }
+      else if(c.key === 'qty')         { const q=parseFloat(iqty(r))||0; totalQty+=q; val=q||'—'; td.style.textAlign='right';td.style.fontWeight='600'; }
+      else if(c.key === 'uom')         { val = iuom(r); td.style.color='#94a3b8'; }
+      else if(c.key === 'rate')        { const n=parseFloat(irate(r))||0; val=n?'₹'+n.toLocaleString('en-IN',{maximumFractionDigits:2}):'—'; td.style.textAlign='right'; }
+      else if(c.key === 'amount')      { const n=parseFloat(iamt(r))||0; totalAmt+=n; val=n?'₹'+Math.round(n).toLocaleString('en-IN'):'—'; td.style.textAlign='right';td.style.fontWeight='600';td.style.color='#0f172a'; }
+      td.textContent = val; td.title = String(val);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  if(!rows.length){
+    const tr=document.createElement('tr');
+    const td=document.createElement('td');
+    td.colSpan=MMS_DRILL_COLS.length;
+    td.style.cssText='padding:32px;text-align:center;color:#94a3b8;font-size:13px';
+    td.textContent='No line items found for this group.';
+    tr.appendChild(td);tbody.appendChild(tr);
+  }
+
+  document.getElementById('mms-modal-footer').textContent =
+    rows.length ? `Total Qty: ${totalQty.toLocaleString('en-IN')} · Total Amount: ₹${Math.round(totalAmt).toLocaleString('en-IN')}` : '';
+
+  document.getElementById('mms-modal').style.display = 'block';
+}
+
+function closeMmsModal(){
+  document.getElementById('mms-modal').style.display = 'none';
+}
+
 function renderGMAnalysis(){
   const rows=getGMARows();
   const el=document.getElementById('gma-results');
@@ -1354,12 +1488,14 @@ async function ingest(txt,src){
   showOv('Computing COGS for '+groups.size.toLocaleString()+' projects…');
   await yieldToBrowser();
   allRows=[];
+  rawItemsMap.clear();
   let gi=0;
-  for(const [,items] of groups){
+  for(const [id,items] of groups){
     const base={...items[0]};
     Object.assign(base,computeCOGS(items));
     base._isHybrid = items.some(r=>(r['item_category']||'').trim()==='Hybrid Inverter');
     base._search = [base['SSE ID'],base['Customer Name'],base['City'],base['State'],base['Booking Type'],base['Tagg 2']].join(' ').toLowerCase();
+    rawItemsMap.set(id, items);   // store raw DN lines for drill-down
     allRows.push(base);
     gi++;
     if(gi%1000===0){ showOv('Computing COGS… '+(gi/groups.size*100|0)+'%'); await yieldToBrowser(); }
@@ -1501,6 +1637,8 @@ function computeCOGS(items){
     'MMS: Rafter - Amt':   r0(mmsR_amt),
     'MMS: Others - Qty':   Math.round(mmsO_qty),
     'MMS: Others - Amt':   r0(mmsO_amt),
+    'MMS: Total - Qty':    Math.round(mmsP_qty+mmsC_qty+mmsR_qty+mmsO_qty),
+    'MMS: Total - Amt':    r0(mmsP_amt+mmsC_amt+mmsR_amt+mmsO_amt),
     'COGS: Module':              r0(module_),
     'COGS: Inverter':            r0(inverter),
     'COGS: Cables':              r0(cables),
@@ -1863,11 +2001,12 @@ const ANALYSIS_COLS = [
   'Offer Type',
   'Installed Kitts',
   'Kitts',
-  // MMS breakdown — 4 groups × (qty + amount) = 8 cols
+  // MMS breakdown — 4 groups × (qty + amount) + total = 10 cols
   'MMS: Purlin J - Qty', 'MMS: Purlin J - Amt',
   'MMS: Column - Qty',          'MMS: Column - Amt',
   'MMS: Rafter - Qty',          'MMS: Rafter - Amt',
   'MMS: Others - Qty',          'MMS: Others - Amt',
+  'MMS: Total - Qty',           'MMS: Total - Amt',
   // BOM Details
   'BOM Details Type 1',
   'BOM Details Type 2',
@@ -1886,7 +2025,7 @@ function buildAnalysisHeader(){
     {label:'',              cols:1,  bg:'#f8fafc', cl:'#334155', bl:''},           // Install Date
     {label:'Project Info',  cols:4,  bg:'#f1f5f9', cl:'#475569', bl:'2px solid #94a3b8'},
     {label:'Kitts',         cols:2,  bg:'#fff7ed', cl:'#c2410c', bl:'2px solid #fed7aa'},
-    {label:'MMS Breakdown', cols:8,  bg:'#e0e7ff', cl:'#3730a3', bl:'2px solid #6366f1'},
+    {label:'MMS Breakdown', cols:10, bg:'#e0e7ff', cl:'#3730a3', bl:'2px solid #6366f1'},
     {label:'BOM Details',   cols:4,  bg:'#f0fdf4', cl:'#15803d', bl:'2px solid #86efac'},
   ];
   groups1.forEach(g=>{
@@ -1923,6 +2062,9 @@ function buildAnalysisHeader(){
     tr2.appendChild(mkTh(grp+' Qty','background:#e0e7ff;color:#3730a3;text-align:center;min-width:65px'+bl));
     tr2.appendChild(mkTh(grp+' ₹','background:#e0e7ff;color:#3730a3;text-align:center;min-width:90px'));
   });
+  // MMS Total (2)
+  tr2.appendChild(mkTh('Total Qty','background:#c7d2fe;color:#3730a3;text-align:center;min-width:72px;font-weight:800;border-left:1px solid #a5b4fc'));
+  tr2.appendChild(mkTh('Total ₹/Wp','background:#c7d2fe;color:#3730a3;text-align:center;min-width:90px;font-weight:800'));
   // BOM Details (4)
   [1,2,3,4].forEach((n,i)=>{
     tr2.appendChild(mkTh('BOM Type '+n,'background:#f0fdf4;color:#15803d;min-width:120px'+(i===0?';border-left:2px solid #86efac':'')));
@@ -1981,8 +2123,26 @@ function renderAnalysis(){
       } else if(col.startsWith('MMS: ') && col.endsWith(' - Qty')){
         const n = Number(v)||0;
         const isFirst = col === 'MMS: Purlin J - Qty';
-        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#3730a3;background:#eef2ff'+(isFirst?';border-left:2px solid #6366f1':'');
+        const grpKey = col.includes('Purlin J')?'purlin':col.includes('Column')?'column':col.includes('Rafter')?'rafter':'others';
+        const kw = parseFloat(row['Project Size (kW)'])||0;
+        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#3730a3;background:#eef2ff'+(isFirst?';border-left:2px solid #6366f1':'')+(n?';cursor:pointer':'');
         td.textContent = n ? n.toLocaleString('en-IN') : '—';
+        if(n){
+          td.title = 'Click to view line items';
+          td.onmouseenter = () => { td.style.background='#c7d2fe'; td.style.textDecoration='underline'; };
+          td.onmouseleave = () => { td.style.background='#eef2ff'; td.style.textDecoration='none'; };
+          td.onclick = () => openMmsModal(row['SSE ID'], grpKey, kw.toFixed(2));
+        }
+      } else if(col === 'MMS: Total - Qty'){
+        const n = Number(v)||0;
+        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe;border-left:1px solid #a5b4fc';
+        td.textContent = n ? n.toLocaleString('en-IN') : '—';
+      } else if(col === 'MMS: Total - Amt'){
+        const n = Number(v)||0;
+        const kw = parseFloat(row['Project Size (kW)'])||0;
+        const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
+        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe';
+        td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
       } else if(col.startsWith('MMS: ') && col.endsWith(' - Amt')){
         const n = Number(v)||0;
         const kw = parseFloat(row['Project Size (kW)'])||0;
@@ -2047,6 +2207,18 @@ let monthBenchmarks = new Map(); // 'YYYYMM' → { Module, Inverter, MMS, Cable,
 let wpMonthOrder = [];
 let wpGmFilter = false; // false = show all, true = GM% < 38% only
 let wpHybridFilter = 'all'; // 'all' | 'hybrid' | 'nonhybrid'
+let wpCategoryFilter = null; // null | 'NON Flash IDS' | 'Flash IDS' | 'Blank IDS'
+
+// Returns true if any WP COGS group sums to 0 (→ Blank IDS regardless of GM%)
+function _hasZeroCOGS(row){
+  return WP_GROUP_NAMES.some(grp=>WP_GROUPS[grp].reduce((s,c)=>s+(Number(row[c])||0),0)===0);
+}
+// Classify a row into one of the three IDS buckets
+function _classifyRow(r){
+  if(_hasZeroCOGS(r)||r['GM %']===null||r['GM %']===undefined) return 'Blank IDS';
+  if(r['GM %']<0.38) return 'Flash IDS';
+  return 'NON Flash IDS';
+}
 
 function setWpHybrid(mode){
   wpHybridFilter = mode;
@@ -2224,6 +2396,7 @@ function buildWpHeader(){
 function clearWpFilters(){
   document.getElementById('wf-search').value='';
   ['wf-month','wf-city'].forEach(id=>document.getElementById(id).value='');
+  wpCategoryFilter=null;
   renderWpBenchmark();
 }
 
@@ -2254,22 +2427,29 @@ function renderWpBenchmark(){
   });
 
   const el=document.getElementById('wf-results');
-  if(el) el.textContent=rows.length.toLocaleString()+' projects';
 
   renderWpSummary(rows);
   buildWpHeader();
+
+  // Apply category filter for detail table only
+  const detailRows = wpCategoryFilter ? rows.filter(r=>_classifyRow(r)===wpCategoryFilter) : rows;
+  if(el) el.textContent=detailRows.length.toLocaleString()+' projects'+(wpCategoryFilter?' ('+wpCategoryFilter+')':'');
+
   const frag=document.createDocumentFragment();
 
-  for(const row of rows){
+  for(const row of detailRows){
     const key=buildMonthKey(row);
     const prev=prevMonthKey(key);
     const bench=monthBenchmarks.get(prev);
     const kw=parseFloat(row['Project Size (kW)'])||0;
     const wp=kw*1000;
     const gm=row['GM %'];
-    const gmLow=(gm!==null&&gm<0.38);
+    const cat=_classifyRow(row);
+    const gmLow=(cat==='Flash IDS');
+    const isBlankRow=(cat==='Blank IDS');
     const tr=document.createElement('tr');
     if(gmLow) tr.style.cssText='background:#fff0f0';
+    else if(isBlankRow) tr.style.cssText='background:#fafaf9';
     let issueCount=0;
 
     const addTd=(text,style='',cls='')=>{
@@ -2283,7 +2463,8 @@ function renderWpBenchmark(){
     // SSE ID
     const sseTd=document.createElement('td');
     sseTd.className='c-sse';
-    sseTd.style.cssText='background:'+(gmLow?'#fff5f5':'#fff')+';border:1px solid #e2e8f0';
+    const sseBg=gmLow?'#fff5f5':isBlankRow?'#fafaf9':'#fff';
+    sseTd.style.cssText='background:'+sseBg+';border:1px solid #e2e8f0';
     sseTd.textContent=row['SSE ID']||'—';
     tr.appendChild(sseTd);
 
@@ -2383,12 +2564,14 @@ function renderWpBenchmark(){
 
   const tb=document.getElementById('wp-body');
   tb.innerHTML='';
-  if(rows.length===0){
+  if(detailRows.length===0){
     const tr=document.createElement('tr');
     const td=document.createElement('td');
     td.colSpan=7+WP_GROUP_NAMES.length+4;
     td.style.cssText='text-align:center;padding:48px;color:#94a3b8;font-size:13px';
-    td.textContent='No projects found — only months with prior month data are shown.';
+    td.textContent=wpCategoryFilter
+      ?'No '+wpCategoryFilter+' projects found for the current filters.'
+      :'No projects found — only months with prior month data are shown.';
     tr.appendChild(td); tb.appendChild(tr);
   } else {
     tb.appendChild(frag);
@@ -2400,13 +2583,13 @@ function renderWpSummary(rows){
   const body=document.getElementById('wp-summary-body');
   if(!body) return;
 
-  // Classify each row
+  // Classify each row using the shared helper (new logic: any zero COGS → Blank)
   const groups=[
-    {label:'NON Flash IDS', filter:r=>r['GM %']!==null&&r['GM %']!==undefined&&r['GM %']>=0.38,
+    {label:'NON Flash IDS', filter:r=>_classifyRow(r)==='NON Flash IDS',
      bg:'#f0fdf4', cl:'#15803d', badge:'#d1fae5', badgeCl:'#15803d', badgeBrd:'#86efac'},
-    {label:'Flash IDS',     filter:r=>r['GM %']!==null&&r['GM %']!==undefined&&r['GM %']<0.38,
+    {label:'Flash IDS',     filter:r=>_classifyRow(r)==='Flash IDS',
      bg:'#fff5f5', cl:'#dc2626', badge:'#fee2e2', badgeCl:'#dc2626', badgeBrd:'#fca5a5'},
-    {label:'Blank IDS',     filter:r=>r['GM %']===null||r['GM %']===undefined,
+    {label:'Blank IDS',     filter:r=>_classifyRow(r)==='Blank IDS',
      bg:'#fafaf9', cl:'#78716c', badge:'#f5f5f4', badgeCl:'#78716c', badgeBrd:'#d6d3d1'},
   ];
 
@@ -2431,11 +2614,24 @@ function renderWpSummary(rows){
       :'<span style="font-weight:800;font-size:11.5px;color:'+g.badgeCl+';background:'+g.badge
         +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+g.badgeBrd+'">'+(gm*100).toFixed(1)+'%</span>';
 
+    const isActive=wpCategoryFilter===g.label;
     const tr=document.createElement('tr');
-    tr.style.background=g.bg;
+    tr.style.cssText='background:'+g.bg+';cursor:pointer;transition:outline .1s';
+    if(isActive) tr.style.cssText+=';outline:2px solid '+(i===0?'#16a34a':i===1?'#dc2626':'#78716c')+';outline-offset:-2px;box-shadow:inset 0 0 0 2px '+(i===0?'#16a34a':i===1?'#dc2626':'#a8a29e');
+    tr.title='Click to filter detail table to '+g.label+' (click again to clear)';
+    tr.addEventListener('click',()=>{
+      wpCategoryFilter = wpCategoryFilter===g.label ? null : g.label;
+      renderWpBenchmark();
+    });
+    tr.addEventListener('mouseenter',()=>{ if(!isActive) tr.style.filter='brightness(.96)'; });
+    tr.addEventListener('mouseleave',()=>{ tr.style.filter=''; });
+
+    // Filter indicator icon
+    const filterIcon=isActive?'<span style="font-size:9px;margin-left:5px;background:'+g.badge+';color:'+g.badgeCl+';padding:1px 6px;border-radius:99px;border:1px solid '+g.badgeBrd+'">● filtered</span>':'';
+
     tr.innerHTML=
       '<td style="padding:6px 12px;font-weight:700;color:#334155;border:1px solid #e2e8f0;text-align:center">'+(i+1)+'</td>'
-      +'<td style="padding:6px 12px;font-weight:700;color:'+g.cl+';border:1px solid #e2e8f0">'+g.label+'</td>'
+      +'<td style="padding:6px 12px;font-weight:700;color:'+g.cl+';border:1px solid #e2e8f0">'+g.label+filterIcon+'</td>'
       +'<td style="padding:6px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+ids.toLocaleString()+'</td>'
       +'<td style="padding:6px 12px;text-align:right;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+fmtKw(kw)+'</td>'
       +'<td style="padding:6px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(rev)+'</td>'
@@ -2453,10 +2649,13 @@ function renderWpSummary(rows){
       +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+(totalGm>=0.38?'#86efac':'#fca5a5')+'">'+((totalGm*100).toFixed(1))+'%</span>';
 
   const trTotal=document.createElement('tr');
-  trTotal.style.cssText='background:linear-gradient(90deg,#f8fafc,#eef2ff);border-top:2px solid #c7d2fe';
+  trTotal.style.cssText='background:linear-gradient(90deg,#f8fafc,#eef2ff);border-top:2px solid #c7d2fe'+(wpCategoryFilter?';opacity:.6':'');
+  trTotal.title=wpCategoryFilter?'Click to clear category filter':'All projects';
+  if(wpCategoryFilter) trTotal.style.cursor='pointer';
+  trTotal.addEventListener('click',()=>{ if(wpCategoryFilter){wpCategoryFilter=null;renderWpBenchmark();} });
   trTotal.innerHTML=
     '<td style="padding:7px 12px;font-weight:800;color:#334155;border:1px solid #c7d2fe;text-align:center">—</td>'
-    +'<td style="padding:7px 12px;font-weight:800;letter-spacing:.03em;color:#3730a3;border:1px solid #c7d2fe">TOTAL</td>'
+    +'<td style="padding:7px 12px;font-weight:800;letter-spacing:.03em;color:#3730a3;border:1px solid #c7d2fe">TOTAL'+(wpCategoryFilter?' <span style="font-size:9px;font-weight:500;color:#6366f1">(click to clear filter)</span>':'')+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+totalIds.toLocaleString()+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmtKw(totalKw)+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#1e40af;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmt(totalRev)+'</td>'
