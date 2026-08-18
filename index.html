@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Solarsquare · ID Level Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 /* ─────────────────────────────────────────────
    SOLAR SQUARE · GMI MARGIN DASHBOARD
@@ -533,6 +534,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
    ════════════════════════════════════════ */
 .flag-page{display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden}
 .flag-page.visible{display:flex}
+.card{background:#fff;border-radius:12px;border:1px solid var(--border);box-shadow:0 1px 4px rgba(15,23,42,.06)}
 
 .flag-banner{
   margin:16px 24px 0;padding:14px 20px;
@@ -723,6 +725,9 @@ td:has(+ td.c-cogs):not(.c-cogs){}
     <button class="tab-btn" id="tab-wp" onclick="switchTab('wp')">
       ⚡ ₹/Wp Analysis
     </button>
+    <button class="tab-btn" id="tab-gm" onclick="switchTab('gm')">
+      🔍 GM Analysis
+    </button>
   </div>
 
   <!-- Main view wrapper -->
@@ -888,6 +893,49 @@ td:has(+ td.c-cogs):not(.c-cogs){}
     </div>
   </div>
 
+  <!-- GM Analysis Page -->
+  <div class="flag-page" id="gm-page">
+    <!-- Filter bar -->
+    <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
+      <span class="fbar-label">Filters</span>
+      <select class="fs" id="gma-month" onchange="renderGMAnalysis()"><option value="">All Months</option></select>
+      <select class="fs" id="gma-city"  onchange="renderGMAnalysis()"><option value="">All Cities</option></select>
+      <select class="fs" id="gma-offer" onchange="renderGMAnalysis()"><option value="">All Offers</option></select>
+      <span class="fclr" onclick="clearGMAFilters()">✕ Clear</span>
+      <span class="fresults" id="gma-results"></span>
+    </div>
+
+    <div style="padding:16px 24px;display:flex;flex-direction:column;gap:20px;overflow-y:auto;height:calc(100% - 56px)">
+
+      <!-- Single row: At-risk + Cohort -->
+      <div style="display:grid;grid-template-columns:380px 1fr;gap:16px;flex:1;min-height:0">
+
+        <!-- At-Risk Panel -->
+        <div class="card" style="padding:16px;display:flex;flex-direction:column;overflow:hidden">
+          <div style="font-weight:700;font-size:14px;color:#dc2626;margin-bottom:4px">⚠️ At-Risk Projects</div>
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:10px">Flash IDS — GM% below 38%, sorted by gap</div>
+          <div id="at-risk-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+
+        <!-- Cohort Heatmap -->
+        <div class="card" style="padding:16px;display:flex;flex-direction:column;overflow:hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div>
+              <div style="font-weight:700;font-size:14px;color:#0f172a">GM% by Segment × Month</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:2px">Red = below 38% · Green = healthy</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button id="coh-city"  onclick="setCohortDim('city')"  style="padding:4px 10px;border-radius:6px;border:1px solid #6366f1;background:#6366f1;color:#fff;font-size:11px;font-weight:600;cursor:pointer">City</button>
+              <button id="coh-offer" onclick="setCohortDim('offer')" style="padding:4px 10px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#64748b;font-size:11px;font-weight:600;cursor:pointer">Offer</button>
+            </div>
+          </div>
+          <div id="cohort-table" style="overflow:auto;flex:1;font-size:11px"></div>
+        </div>
+      </div>
+
+    </div><!-- end inner scroll -->
+  </div><!-- end gm-page -->
+
 </div><!-- end .page -->
 
 <script>
@@ -926,6 +974,321 @@ function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout
 
 // ── yield to browser between heavy batches ──
 const yieldToBrowser = () => new Promise(r => setTimeout(r, 0));
+
+// ════════════════════════════════════════════════════════
+//  GM ANALYSIS TAB
+// ════════════════════════════════════════════════════════
+
+let _gmTrendMode   = 'month';   // 'month' | 'week'
+let _cohortDim     = 'city';    // 'city'  | 'offer'
+let _gmTrendChart  = null;
+let _costChart     = null;
+
+function clearGMAFilters(){
+  ['gma-month','gma-city','gma-offer'].forEach(id=>{const el=document.getElementById(id); if(el) el.value='';});
+  renderGMAnalysis();
+}
+
+function setGMTrendMode(mode){
+  _gmTrendMode = mode;
+  const mBtn = document.getElementById('gmt-month');
+  const wBtn = document.getElementById('gmt-week');
+  if(mBtn){ mBtn.style.background=mode==='month'?'#6366f1':'#fff'; mBtn.style.color=mode==='month'?'#fff':'#64748b'; mBtn.style.borderColor=mode==='month'?'#6366f1':'#e2e8f0'; }
+  if(wBtn){ wBtn.style.background=mode==='week' ?'#6366f1':'#fff'; wBtn.style.color=mode==='week' ?'#fff':'#64748b'; wBtn.style.borderColor=mode==='week' ?'#6366f1':'#e2e8f0'; }
+  renderGMTrend(getGMARows());
+}
+
+function setCohortDim(dim){
+  _cohortDim = dim;
+  const cBtn = document.getElementById('coh-city');
+  const oBtn = document.getElementById('coh-offer');
+  if(cBtn){ cBtn.style.background=dim==='city' ?'#6366f1':'#fff'; cBtn.style.color=dim==='city' ?'#fff':'#64748b'; cBtn.style.borderColor=dim==='city' ?'#6366f1':'#e2e8f0'; }
+  if(oBtn){ oBtn.style.background=dim==='offer'?'#6366f1':'#fff'; oBtn.style.color=dim==='offer'?'#fff':'#64748b'; oBtn.style.borderColor=dim==='offer'?'#6366f1':'#e2e8f0'; }
+  renderCohortTable(getGMARows());
+}
+
+function getGMARows(){
+  const mo = (document.getElementById('gma-month')?.value||'').trim();
+  const cy = (document.getElementById('gma-city')?.value||'').trim();
+  const ot = (document.getElementById('gma-offer')?.value||'').trim();
+  let rows = allRows.slice();
+  if(mo) rows = rows.filter(r => r['Month']===mo);
+  if(cy) rows = rows.filter(r => r['City']===cy);
+  if(ot) rows = rows.filter(r => r['Offer Type']===ot);
+  return rows;
+}
+
+// ── Sort months chronologically (format: "Jan 2024" etc.) ──
+function sortMonths(months){
+  const MO={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12};
+  return months.slice().sort((a,b)=>{
+    const [am,ay]=a.split(' '); const [bm,by]=b.split(' ');
+    return (parseInt(ay)-parseInt(by)) || ((MO[am]||0)-(MO[bm]||0));
+  });
+}
+
+function gmColor(gm){ return gm===null?'#94a3b8':gm>=0.38?'#16a34a':gm>=0.28?'#d97706':'#dc2626'; }
+function gmBg(gm){ return gm===null?'#f1f5f9':gm>=0.38?'#dcfce7':gm>=0.28?'#fef3c7':'#fee2e2'; }
+
+// ── Build GM% per period ──
+function groupGM(rows, keyFn){
+  const map={};
+  for(const r of rows){
+    const k=keyFn(r); if(!k) continue;
+    if(!map[k]) map[k]={rev:0,cogs:0,cnt:0};
+    map[k].rev  += parseFloat(r['Final Output'])||0;
+    map[k].cogs += parseFloat(r['Installed COGS'])||0;
+    map[k].cnt++;
+  }
+  const out={};
+  for(const [k,v] of Object.entries(map)){
+    out[k]={gm: v.rev>0?(v.rev-v.cogs)/v.rev:null, cnt:v.cnt, rev:v.rev, cogs:v.cogs};
+  }
+  return out;
+}
+
+// ── 1. TREND CHART ──
+function renderGMTrend(rows){
+  const isoWeek=d=>{
+    const dt=new Date(d); if(isNaN(dt)) return null;
+    const day=dt.getDay()||7;
+    dt.setDate(dt.getDate()+4-day);
+    const y=dt.getFullYear();
+    const start=new Date(y,0,1);
+    return y+'W'+String(Math.ceil((((dt-start)/864e5)+1)/7)).padStart(2,'0');
+  };
+
+  const keyFn = _gmTrendMode==='month'
+    ? r => r['Month']||''
+    : r => isoWeek(r['Installation Completion Date']);
+
+  const overall = groupGM(rows, keyFn);
+  const flash   = groupGM(rows.filter(r=>(parseFloat(r['GM %'])||0)<0.38 && r['GM %']!=null), keyFn);
+  const nonFlash= groupGM(rows.filter(r=>(parseFloat(r['GM %'])||0)>=0.38), keyFn);
+
+  let labels = Object.keys(overall);
+  if(_gmTrendMode==='month') labels = sortMonths(labels);
+  else labels = labels.sort();
+
+  const toArr=(map,lbl)=>lbl.map(l=>map[l]?parseFloat((map[l].gm*100).toFixed(1)):null);
+
+  const datasets=[
+    {label:'Overall',  data:toArr(overall,labels),  borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.12)',tension:.35,borderWidth:2.5,pointRadius:4,pointHoverRadius:6,fill:true},
+    {label:'NON Flash',data:toArr(nonFlash,labels), borderColor:'#16a34a',backgroundColor:'transparent',tension:.35,borderWidth:2,pointRadius:3,borderDash:[]},
+    {label:'Flash IDS',data:toArr(flash,labels),    borderColor:'#dc2626',backgroundColor:'transparent',tension:.35,borderWidth:2,pointRadius:3,borderDash:[4,3]},
+  ];
+
+  const ctx=document.getElementById('gm-trend-chart');
+  if(!ctx) return;
+  if(_gmTrendChart){_gmTrendChart.destroy();_gmTrendChart=null;}
+  _gmTrendChart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'top',labels:{font:{size:11},boxWidth:12,padding:10}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y!=null?c.parsed.y.toFixed(1)+'%':'—'}`}},
+      },
+      scales:{
+        x:{ticks:{font:{size:10},maxRotation:45},grid:{display:false}},
+        y:{ticks:{callback:v=>v+'%',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'},
+           min:0,max:60,
+        }
+      }
+    }
+  });
+}
+
+// ── 2. COST DRIVER CHART ──
+const COST_BUCKETS=[
+  {label:'Module',   key:'COGS: Module'},
+  {label:'Inverter', key:'COGS: Inverter'},
+  {label:'MMS',      key:['COGS: Prefab MMS','COGS: Tin Shed MMS','COGS: Welded MMS','COGS: Conduit Pipe']},
+  {label:'Cables',   key:'COGS: Cables'},
+  {label:'Elec BoS', key:'COGS: Electrical BoS'},
+  {label:'I&C Kit',  key:'COGS: I&C KIT'},
+  {label:'Others',   key:['COGS: Earthing & LA','COGS: SS NBW','COGS: I&C Accessories','COGS: Junction Box','COGS: Safety','COGS: Civil Work','COGS: Data Logger','COGS: Ladder','COGS: Welcome Kit & Board']},
+];
+
+function getBucketWp(rows, bucket){
+  const totalKw=rows.reduce((s,r)=>s+(parseFloat(r['Project Size (kW)'])||0),0);
+  if(!totalKw) return 0;
+  const getAmt=r=>{
+    if(Array.isArray(bucket.key)) return bucket.key.reduce((s,k)=>s+(parseFloat(r[k])||0),0);
+    return parseFloat(r[bucket.key])||0;
+  };
+  const total=rows.reduce((s,r)=>s+getAmt(r),0);
+  return total/(totalKw*1000); // ₹/Wp
+}
+
+function buildCostPeriodOptions(){
+  const months = sortMonths([...new Set(allRows.map(r=>r['Month']).filter(Boolean))]);
+  ['cd-period-a','cd-period-b'].forEach((id,i)=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    el.innerHTML='';
+    months.forEach(m=>{ const o=document.createElement('option'); o.value=m; o.textContent=m; el.appendChild(o); });
+    if(months.length>=2){
+      if(i===0&&!cur) el.value=months[months.length-2];
+      else if(i===1&&!cur) el.value=months[months.length-1];
+      else if(cur) el.value=cur;
+    }
+  });
+}
+
+function renderCostDriver(){
+  const pa=document.getElementById('cd-period-a')?.value;
+  const pb=document.getElementById('cd-period-b')?.value;
+  if(!pa||!pb) return;
+  const rowsA=allRows.filter(r=>r['Month']===pa);
+  const rowsB=allRows.filter(r=>r['Month']===pb);
+
+  const labelsArr=COST_BUCKETS.map(b=>b.label);
+  const dataA=COST_BUCKETS.map(b=>parseFloat(getBucketWp(rowsA,b).toFixed(3)));
+  const dataB=COST_BUCKETS.map(b=>parseFloat(getBucketWp(rowsB,b).toFixed(3)));
+
+  const gmA=groupGM(rowsA,r=>r['Month'])[pa];
+  const gmB=groupGM(rowsB,r=>r['Month'])[pb];
+
+  const ctx=document.getElementById('cost-driver-chart'); if(!ctx) return;
+  if(_costChart){_costChart.destroy();_costChart=null;}
+  _costChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:labelsArr,
+      datasets:[
+        {label:pa,data:dataA,backgroundColor:'rgba(99,102,241,.7)',borderRadius:4,borderSkipped:false},
+        {label:pb,data:dataB,backgroundColor:'rgba(220,38,38,.7)',  borderRadius:4,borderSkipped:false},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'top',labels:{font:{size:11},boxWidth:12}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ₹${c.parsed.y.toFixed(2)}/Wp`}},
+        title:{display:true,
+          text:[
+            `GM%: ${pa} = ${gmA?( gmA.gm*100).toFixed(1)+'%':'—'}  |  ${pb} = ${gmB?(gmB.gm*100).toFixed(1)+'%':'—'}`,
+          ],font:{size:11},color:'#475569',padding:{bottom:8}
+        }
+      },
+      scales:{
+        x:{ticks:{font:{size:10}},grid:{display:false}},
+        y:{ticks:{callback:v=>'₹'+v+'/Wp',font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}}
+      }
+    }
+  });
+}
+
+// ── 3. COHORT HEATMAP TABLE ──
+function renderCohortTable(rows){
+  const el=document.getElementById('cohort-table'); if(!el) return;
+  const dimKey=_cohortDim==='city'?'City':'Offer Type';
+  const months=sortMonths([...new Set(rows.map(r=>r['Month']).filter(Boolean))]).slice(-6); // last 6 months
+  const dims=[...new Set(rows.map(r=>r[dimKey]).filter(Boolean))].sort();
+
+  if(!dims.length||!months.length){el.innerHTML='<div style="color:#94a3b8;padding:20px;text-align:center">No data</div>';return;}
+
+  // Build lookup: dim → month → {gm}
+  const lookup={};
+  for(const r of rows){
+    const d=r[dimKey], m=r['Month'];
+    if(!d||!m) continue;
+    if(!lookup[d]) lookup[d]={};
+    if(!lookup[d][m]) lookup[d][m]={rev:0,cogs:0,cnt:0};
+    lookup[d][m].rev  += parseFloat(r['Final Output'])||0;
+    lookup[d][m].cogs += parseFloat(r['Installed COGS'])||0;
+    lookup[d][m].cnt++;
+  }
+
+  let html='<table style="border-collapse:collapse;width:100%;white-space:nowrap">';
+  // Header
+  html+='<thead><tr>';
+  html+=`<th style="text-align:left;padding:6px 10px;background:#f8fafc;font-size:11px;color:#475569;border-bottom:2px solid #e2e8f0;position:sticky;left:0;z-index:2">${dimKey}</th>`;
+  months.forEach(m=>{
+    html+=`<th style="padding:6px 8px;background:#f8fafc;font-size:10px;color:#475569;border-bottom:2px solid #e2e8f0;text-align:center;min-width:70px">${m}</th>`;
+  });
+  html+='</tr></thead><tbody>';
+
+  // Rows
+  for(const dim of dims){
+    html+=`<tr>`;
+    html+=`<td style="padding:5px 10px;font-size:11px;font-weight:600;color:#0f172a;background:#fff;border-bottom:1px solid #f1f5f9;position:sticky;left:0;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${dim}">${dim}</td>`;
+    for(const m of months){
+      const v=lookup[dim]?.[m];
+      const gm=v&&v.rev>0?(v.rev-v.cogs)/v.rev:null;
+      const pct=gm!=null?(gm*100).toFixed(1)+'%':'—';
+      const cnt=v?v.cnt:0;
+      const bg=gmBg(gm), cl=gm!=null?gmColor(gm):'#94a3b8';
+      html+=`<td style="padding:5px 8px;background:${bg};text-align:center;border-bottom:1px solid #f1f5f9;border-left:1px solid #e2e8f0">
+        <div style="font-weight:700;color:${cl};font-size:11px">${pct}</div>
+        <div style="color:#94a3b8;font-size:9px">${cnt?cnt+'p':''}</div>
+      </td>`;
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+// ── 4. AT-RISK PANEL ──
+function renderAtRisk(rows){
+  const el=document.getElementById('at-risk-list'); if(!el) return;
+  const atRisk=rows
+    .filter(r=>r['GM %']!=null && parseFloat(r['GM %'])<0.38)
+    .map(r=>({id:r['SSE ID'],gm:parseFloat(r['GM %']),city:r['City'],kw:parseFloat(r['Project Size (kW)'])||0,offer:r['Offer Type'],gap:0.38-parseFloat(r['GM %'])}))
+    .sort((a,b)=>b.gap-a.gap)
+    .slice(0,30);
+
+  if(!atRisk.length){
+    el.innerHTML='<div style="color:#16a34a;font-size:12px;padding:16px;text-align:center">✅ No at-risk projects in selection</div>';
+    return;
+  }
+
+  el.innerHTML=atRisk.map(r=>{
+    const gmPct=(r.gm*100).toFixed(1);
+    const gap=(r.gap*100).toFixed(1);
+    const barW=Math.min(100,Math.round((r.gap/0.38)*100));
+    const clr=r.gm>=0.28?'#d97706':'#dc2626';
+    return `<div style="border:1px solid #fee2e2;border-radius:8px;padding:8px 10px;background:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-weight:700;font-size:11px;color:#0f172a">${r.id}</span>
+        <span style="font-weight:700;font-size:12px;color:${clr}">${gmPct}%</span>
+      </div>
+      <div style="font-size:10px;color:#64748b;margin-bottom:5px">${r.city||'—'} · ${r.kw.toFixed(2)} kW · ${r.offer||'—'}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="flex:1;background:#fee2e2;border-radius:99px;height:5px;overflow:hidden">
+          <div style="width:${barW}%;height:100%;background:${clr};border-radius:99px"></div>
+        </div>
+        <span style="font-size:10px;color:${clr};white-space:nowrap">−${gap}pp to target</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Main render orchestrator ──
+function renderGMAnalysis(){
+  const rows=getGMARows();
+  const el=document.getElementById('gma-results');
+  if(el) el.textContent=rows.length.toLocaleString()+' projects';
+
+  renderCohortTable(rows);
+  renderAtRisk(rows);
+}
+
+function buildGMAFilters(){
+  const months=sortMonths([...new Set(allRows.map(r=>r['Month']).filter(Boolean))]);
+  const cities =[...new Set(allRows.map(r=>r['City']).filter(Boolean))].sort();
+  const offers =[...new Set(allRows.map(r=>r['Offer Type']).filter(Boolean))].sort();
+  const pop2=(id,vals)=>{ const el=document.getElementById(id); if(!el) return; const cur=el.value; el.innerHTML='<option value="">All</option>'+vals.map(v=>`<option>${v}</option>`).join(''); el.value=cur; };
+  pop2('gma-month',months);
+  pop2('gma-city',cities);
+  pop2('gma-offer',offers);
+  buildCostPeriodOptions();
+}
 
 // Auto-load
 addEventListener('load', () => {
@@ -1034,6 +1397,7 @@ async function ingest(txt,src){
   showOv('Building table…');
   await yieldToBrowser();
   buildFilters();
+  buildGMAFilters();
   buildHeader();
   applyFilters(true);
   updateFlagBadge();
@@ -1449,15 +1813,18 @@ function switchTab(tab){
   const mainView    = document.getElementById('main-view');
   const analysisPage= document.getElementById('analysis-page');
   const wpPage      = document.getElementById('wp-page');
+  const gmPage      = document.getElementById('gm-page');
   const tabMain     = document.getElementById('tab-main');
   const tabAnalysis = document.getElementById('tab-analysis');
   const tabWp       = document.getElementById('tab-wp');
+  const tabGm       = document.getElementById('tab-gm');
 
   // Hide all
   mainView.classList.add('hidden');
   analysisPage.classList.remove('visible');
   wpPage.classList.remove('visible');
-  [tabMain, tabAnalysis, tabWp].forEach(b => b.classList.remove('active'));
+  gmPage.classList.remove('visible');
+  [tabMain, tabAnalysis, tabWp, tabGm].forEach(b => b && b.classList.remove('active'));
 
   if(tab === 'main'){
     mainView.classList.remove('hidden');
@@ -1471,6 +1838,10 @@ function switchTab(tab){
     tabWp.classList.add('active');
     _syncGmToggleUI();
     renderWpBenchmark();
+  } else if(tab === 'gm'){
+    gmPage.classList.add('visible');
+    tabGm.classList.add('active');
+    renderGMAnalysis();
   }
 }
 
