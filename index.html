@@ -48,13 +48,16 @@ html,body{height:100%;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
 .hdr-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 0 2px rgba(74,222,128,.25)}
 .hdr-dot.loading{background:#fbbf24;box-shadow:0 0 0 2px rgba(251,191,36,.25)}
 .hdr-dot.error{background:#f87171;box-shadow:0 0 0 2px rgba(248,113,113,.25)}
-.btn-upload{
+.btn-upload,.btn-dl{
   display:flex;align-items:center;gap:6px;
   padding:6px 14px;border-radius:6px;border:none;
   background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:500;
   cursor:pointer;transition:background .15s;
 }
-.btn-upload:hover{background:rgba(255,255,255,.25)}
+.btn-upload:hover,.btn-dl:hover{background:rgba(255,255,255,.25)}
+.btn-dl{background:rgba(74,222,128,.2);}
+.btn-dl:hover{background:rgba(74,222,128,.35);}
+.btn-dl:disabled{opacity:.45;cursor:default;}
 
 /* ── FILTER BAR ── */
 .fbar{
@@ -154,6 +157,13 @@ tbody tr:last-child{border-bottom:none}
 td{padding:9px 14px;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
 td.c-sse{font-weight:700;color:var(--accent);font-size:12px}
 
+/* COGS cells */
+td.c-cogs{font-variant-numeric:tabular-nums;color:#1e40af;font-weight:600;font-size:12px}
+td.c-cogs-desc{color:var(--text2);font-size:11.5px;max-width:220px;white-space:normal;line-height:1.3}
+thead th[data-col^="COGS:"]{background:#f0f4ff;color:#1e40af;border-left:2px solid #c7d7ff}
+thead th[data-col^="COGS:"]:first-of-type{border-left:2px solid #93b4fd}
+td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
+
 /* badges */
 .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:10.5px;font-weight:600}
 .b-pa26{background:#dbeafe;color:#1e40af}
@@ -227,10 +237,12 @@ td.c-sse{font-weight:700;color:var(--accent);font-size:12px}
         <div class="hdr-dot loading" id="hdr-dot"></div>
         <span id="hdr-status">Connecting…</span>
       </div>
-      <label class="btn-upload" for="file-upload">
-        ⬆ Upload file
-        <input type="file" id="file-upload" accept=".gz,.csv" style="display:none"/>
-      </label>
+      <button class="btn-dl" id="btn-dl" onclick="downloadCSV()" disabled title="Download filtered data as CSV">
+        ⬇ Download Data
+      </button>
+      <button class="btn-upload" id="btn-refresh" onclick="refreshData()" title="Refresh data from GitHub">
+        🔄 Refresh
+      </button>
     </div>
   </header>
 
@@ -320,8 +332,16 @@ const COLS = [
   'Size Bucket','Offer Type','Phase Connection','Finance Mode / Payment Schedule',
   'Final Output',
   'BOM Details Type 1','BOM Details Type 2','BOM Details Type 3','BOM Details Type 4',
-  'Metering (Config Driven)'
+  // ── COGS ──
+  'COGS: Module','COGS: Inverter','COGS: Cables','COGS: Prefab MMS',
+  'COGS: Conduit Pipe','COGS: Electrical BoS','COGS: Earthing & LA',
+  'COGS: SS NBW','COGS: I&C Accessories','COGS: Junction Box',
+  'COGS: Tin Shed MMS','COGS: Welded MMS','COGS: I&C KIT',
+  'COGS: Safety','COGS: Civil Work','COGS: Data Logger',
+  'COGS: Ladder','COGS: Welcome Kit & Board','COGS: Module LC',
+  'COGS: Metering','COGS: Inverter Desc'
 ];
+const COGS_COLS = new Set(COLS.filter(c => c.startsWith('COGS:')));
 
 let allRows=[], filtered=[], sortCol=null, sortDir=1;
 
@@ -345,33 +365,139 @@ async function loadGH(){
   }
 }
 
-// File upload
-document.getElementById('file-upload').addEventListener('change',async e=>{
-  const f=e.target.files[0]; if(!f) return;
-  showOv('Reading '+f.name+'…'); setDot('loading','Reading file…');
-  try{
-    const buf=await f.arrayBuffer();
-    const txt=new TextDecoder().decode(f.name.endsWith('.gz')?pako.inflate(new Uint8Array(buf)):buf);
-    ingest(txt,f.name);
-  }catch(e){ hideOv(); setDot('error','Read failed'); toast('Error: '+e.message); }
-  e.target.value='';
-});
+// Refresh
+function refreshData(){
+  const btn=document.getElementById('btn-refresh');
+  btn.disabled=true; btn.textContent='🔄 Refreshing…';
+  loadGH().finally(()=>{ btn.disabled=false; btn.textContent='🔄 Refresh'; });
+}
 
 // ── Ingest ──
 function ingest(txt,src){
   const {rows}=parseCSV(txt);
-  const seen=new Set();
-  allRows=[];
+  // Group ALL rows by SSE ID (CSV has one row per DN line item)
+  const groups=new Map();
   for(const r of rows){
     const id=(r['SSE ID']||'').trim();
-    if(!id||seen.has(id)) continue;
-    seen.add(id); allRows.push(r);
+    if(!id) continue;
+    if(!groups.has(id)) groups.set(id,[]);
+    groups.get(id).push(r);
   }
+  allRows=[];
+  for(const [,items] of groups){
+    const base={...items[0]};           // OMS project fields from first row
+    Object.assign(base,computeCOGS(items)); // merge COGS aggregations
+    allRows.push(base);
+  }
+
+  // ── I&C KIT: split total by City + Installation Month equally across projects ──
+  // e.g. Pune July total ₹10k across 10 projects → ₹1k each
+  const icGroups=new Map();
+  for(const row of allRows){
+    const city=(row['City']||'').trim();
+    const mon=String(row['Installation Month No']||row['Month']||'').trim();
+    const key=city+'|'+mon;
+    if(!icGroups.has(key)) icGroups.set(key,{total:0,count:0,rows:[]});
+    const g=icGroups.get(key);
+    g.total+=(Number(row['COGS: I&C KIT'])||0);
+    g.count++;
+    g.rows.push(row);
+  }
+  for(const g of icGroups.values()){
+    const avg=g.count>0?g.total/g.count:0;
+    for(const row of g.rows) row['COGS: I&C KIT']=avg;
+  }
+
   buildFilters();
   buildHeader();
   applyFilters(true);   // true = first load, compute totals
   hideOv();
   setDot('ok','Live · '+allRows.length.toLocaleString()+' records from '+src);
+  document.getElementById('btn-dl').disabled = false;
+}
+
+// ── COGS aggregation (mirrors the SQL logic) ──
+function computeCOGS(items){
+  const LADDER_NAMES=new Set([
+    'Aluminium Ladder (PRO STEP-PS-ST- 7) 7 Step+1 Platform',
+    'Aluminium Ladder (PRO STEP-PS-ST-6 ) 5 Step+1 Platform',
+    'Aluminium Ladder (PRO STEP-PS-ST- 7) 6 Step+1 Platform'
+  ]);
+  const fld=(r,...keys)=>{ for(const k of keys){const v=r[k]; if(v!=null&&v!=='') return v;} return ''; };
+  const cat =r=>(fld(r,'custom_item_category','Custom Item Category','item_category','Item Category')||'').trim();
+  const amt =r=>parseFloat(fld(r,'amount','Amount')||0)||0;
+  const name=r=>(fld(r,'item_name','Item Name','item_name','item name')||'').trim();
+  const rate=r=>parseFloat(fld(r,'rate','Rate')||0)||0;
+  const qty =r=>parseFloat(fld(r,'qty','Qty','quantity','Quantity')||0)||0;
+  const desc=r=>(fld(r,'description','Description')||'').trim();
+
+  // Installation month for Module LC multiplier
+  // Use Installation Month No (1-12); July=7 onwards → ×0.50, before July → ×0.75
+  const instMonthRaw = fld(items[0],'Installation Month No','installation_month_no','inst_month');
+  const instMonth = parseInt(instMonthRaw)||0;
+  const lcMultiplier = (instMonth >= 7) ? 0.50 : 0.75;
+
+  // Metering from first row (OMS field)
+  const meteringVal = parseFloat(fld(items[0],'Metering (Config Driven)','Metering','metering')||0)||0;
+
+  let module_=0,inverter=0,cables=0,prefabMMS=0,conduitPipe=0;
+  let electricalBoS=0,earthingLA=0,ssNBW=0,icAcc=0,junctionBox=0;
+  let tinShedMMS=0,weldedMMS=0,icKit=0,safety=0,civilWork=0;
+  let dataLogger=0,ladder=0,welcomeKit=0,moduleLCRaw=0;
+  const invDescs=[];
+
+  for(const r of items){
+    const c=cat(r), a=amt(r), n=name(r), rt=rate(r), q=qty(r), d=desc(r);
+    if(c==='Module')                                                         module_+=a;
+    if(['Inverter','Hybrid Inverter','Inverter Cluster'].includes(c)){       inverter+=a; if(d&&!invDescs.includes(d))invDescs.push(d); }
+    if(['AC Cable','DC Cable','Cables','2C Cu Arm AC Cable'].includes(c))    cables+=a;
+    if(c==='Prefab MMS')                                                     prefabMMS+=a;
+    if(c==='Conduit Pipe')                                                   conduitPipe+=a;
+    if(['Electrical BoS','FRP Walkway','Cable Tray','Walkway'].includes(c))  electricalBoS+=a;
+    if(c==='Earthing & LA')                                                  earthingLA+=a;
+    if(c==='SS NBW')                                                         ssNBW+=a;
+    if(c==='I&C Accessories')                                                icAcc+=a;
+    if(['Junction Box','ACDB'].includes(c))                                  junctionBox+=a;
+    if(c==='Tin Shed MMS')                                                   tinShedMMS+=a;
+    if(c==='Welded MMS')                                                     weldedMMS+=a;
+    if(c==='I&C KIT')                                                        icKit+=a;
+    if(['Safety','Safety Lifeline'].includes(c))                             safety+=a;
+    if(c==='Civil Work')                                                     civilWork+=a;
+    if(c==='Data Logger')                                                    dataLogger+=a;
+    if(LADDER_NAMES.has(n))                                                  ladder+=a;
+    if(c==='Marketing')                                                      welcomeKit+=a;
+    else if(c==='Fixtures and Tools'&&!LADDER_NAMES.has(n))                  welcomeKit+=a;
+    // Module LC raw (qty × watts, rate-gated)
+    if(n==='540 Wp Mono Bifacial DCR-PREMIER'&&rt!==11055)                  moduleLCRaw+=q*540;
+    else if(n==='610 Wp Mono Bifacial Topcon N-Type DCR-PREMIER'&&rt<=13041.8) moduleLCRaw+=q*610;
+  }
+
+  // Apply installation-month multiplier to Module LC
+  const moduleLC = moduleLCRaw * lcMultiplier;
+
+  return{
+    'COGS: Module':              module_,
+    'COGS: Inverter':            inverter,
+    'COGS: Cables':              cables,
+    'COGS: Prefab MMS':          prefabMMS,
+    'COGS: Conduit Pipe':        conduitPipe,
+    'COGS: Electrical BoS':      electricalBoS,
+    'COGS: Earthing & LA':       earthingLA,
+    'COGS: SS NBW':              ssNBW,
+    'COGS: I&C Accessories':     icAcc,
+    'COGS: Junction Box':        junctionBox,
+    'COGS: Tin Shed MMS':        tinShedMMS,
+    'COGS: Welded MMS':          weldedMMS,
+    'COGS: I&C KIT':             icKit,
+    'COGS: Safety':              safety,
+    'COGS: Civil Work':          civilWork,
+    'COGS: Data Logger':         dataLogger,
+    'COGS: Ladder':              ladder,
+    'COGS: Welcome Kit & Board': welcomeKit,
+    'COGS: Module LC':           moduleLC,
+    'COGS: Metering':            meteringVal,
+    'COGS: Inverter Desc':       invDescs.join(' | ')
+  };
 }
 
 // ── CSV ──
@@ -513,7 +639,8 @@ function buildHeader(){
   const tr=document.createElement('tr');
   COLS.forEach(col=>{
     const th=document.createElement('th');
-    th.textContent=col; th.dataset.col=col;
+    th.textContent=col.startsWith('COGS: ')?col.replace('COGS: ',''):col;
+    th.dataset.col=col;
     th.onclick=()=>{
       if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
       document.querySelectorAll('#t-head th').forEach(t=>t.classList.remove('sort-asc','sort-desc'));
@@ -543,9 +670,19 @@ function renderTable(){
     const tr=document.createElement('tr');
     for(const col of COLS){
       const td=document.createElement('td');
-      const v=(row[col]||'').trim();
+      const v=(row[col]==null?'':String(row[col])).trim();
       if(col==='SSE ID'){td.className='c-sse';td.textContent=v;}
       else if(col==='Booking Type'&&v){td.innerHTML='<span class="badge '+bookBadge(v)+'">'+v+'</span>';}
+      else if(COGS_COLS.has(col)){
+        if(col==='COGS: Inverter Desc'){td.textContent=v;td.title=v;td.className='c-cogs-desc';}
+        else{
+          const n=parseFloat(v)||0;
+          td.className='c-cogs';
+          td.textContent=n?'₹'+n.toLocaleString('en-IN',{maximumFractionDigits:0}):'—';
+          td.title=col+': ₹'+n.toLocaleString('en-IN');
+          td.dataset.val=n;
+        }
+      }
       else{td.textContent=v;td.title=v;}
       tr.appendChild(td);
     }
@@ -573,6 +710,35 @@ function bookBadge(v){
   if(u.includes('CASH'))return'b-cash';
   if(u.includes('EMI'))return'b-emi';
   return'b-def';
+}
+
+// ── Download CSV ──
+function downloadCSV(){
+  const rows = filtered.length && filtered.length < allRows.length ? filtered : allRows;
+  const isFiltered = (rows !== allRows && filtered.length !== allRows.length);
+  // Build CSV
+  const escape = v => {
+    const s = (v == null ? '' : String(v));
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? '"' + s.replace(/"/g, '""') + '"'
+      : s;
+  };
+  const lines = [COLS.map(escape).join(',')];
+  for (const row of rows) {
+    lines.push(COLS.map(c => escape(row[c] || '')).join(','));
+  }
+  const csv = lines.join('\r\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const label = isFiltered ? filterLabel().replace(/[^a-z0-9]+/gi,'-') : 'all';
+  const today = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'SSE-data-' + label + '-' + today + '.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Downloaded ' + rows.length.toLocaleString() + ' rows as CSV');
 }
 
 // ── Overlay / status / toast ──
