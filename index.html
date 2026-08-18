@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Solarsquare · SSE ID Analysis</title>
+<title>Solarsquare · ID Level Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 <style>
 /* ─────────────────────────────────────────────
@@ -370,30 +370,38 @@ html,body{
 }
 .kpi-white .kpi-big{color:var(--text1)}
 
-/* Filtered value — clearly visible pill on colored cards */
-.kpi-filtered{
-  display:inline-block;
-  font-size:11.5px;font-weight:700;margin-top:7px;
-  font-variant-numeric:tabular-nums;min-height:20px;
-  padding:2px 9px;border-radius:20px;
-  background:rgba(255,255,255,.22);
-  color:#fff;
-  letter-spacing:.01em;
-}
-.kpi-white .kpi-filtered{
-  color:var(--accent);
-  background:#dbeafe;
-  border:1px solid #bfdbfe;
-}
+/* Filtered pill — hidden when empty */
+.kpi-filtered{display:none}
 
-.kpi-sub{font-size:9.5px;opacity:.5;margin-top:4px;font-weight:400}
+/* Filter tag shown in sub area */
+.kpi-sub{
+  font-size:9px;font-weight:500;margin-top:6px;
+  opacity:.55;letter-spacing:.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .kpi-white .kpi-sub{color:var(--text3);opacity:1}
 
+/* When sub shows a filter tag, style it as a bright chip */
+.kpi-sub.is-filter{
+  display:inline-block;
+  background:rgba(255,255,255,.25);
+  color:#fff;
+  opacity:1;
+  padding:2px 8px;border-radius:20px;
+  font-size:9.5px;font-weight:700;letter-spacing:.02em;
+  border:1px solid rgba(255,255,255,.35);
+  max-width:100%;
+}
+.kpi-white .kpi-sub.is-filter{
+  background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;
+}
+
+/* Icon — keep decorative but tone down */
 .kpi-icon{
-  position:absolute;right:14px;top:14px;font-size:26px;opacity:.12;
+  position:absolute;right:12px;top:10px;font-size:22px;opacity:.10;
   user-select:none;pointer-events:none;
 }
-.kpi-white .kpi-icon{opacity:.06}
+.kpi-white .kpi-icon{opacity:.07}
 
 /* ════════════════════════════════════════
    4. TABLE
@@ -687,7 +695,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
       <div class="hdr-div"></div>
       <div class="hdr-text">
         <h1>GMI Margin Dashboard</h1>
-        <p>Solar Square · SSE ID Analysis · Live Data</p>
+        <p>Solar Square · ID Level · Live Data</p>
       </div>
     </div>
     <div class="hdr-right">
@@ -707,13 +715,13 @@ td:has(+ td.c-cogs):not(.c-cogs){}
   <!-- Tab Navigation -->
   <div class="tab-nav">
     <button class="tab-btn active" id="tab-main" onclick="switchTab('main')">
-      📊 SSE ID Analysis
+      📊 ID Level
     </button>
-<button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">
+    <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">
       📈 Analysis
     </button>
     <button class="tab-btn" id="tab-wp" onclick="switchTab('wp')">
-      ⚡ ₹/Wp Benchmark
+      ⚡ ₹/Wp Analysis
     </button>
   </div>
 
@@ -741,42 +749,42 @@ td:has(+ td.c-cogs):not(.c-cogs){}
         <div class="kpi-label">Total SSE IDs</div>
         <div class="kpi-big" id="k-sse">—</div>
         <div class="kpi-filtered" id="kf-sse"></div>
-        <div class="kpi-sub">Unique projects</div>
+        <div class="kpi-sub" id="kpi-sub-sse">Unique projects</div>
       </div>
       <div class="kpi kpi-blue">
         <div class="kpi-icon">⚡</div>
         <div class="kpi-label">Total Capacity</div>
         <div class="kpi-big" id="k-kw">—</div>
         <div class="kpi-filtered" id="kf-kw"></div>
-        <div class="kpi-sub">kW installed</div>
+        <div class="kpi-sub" id="kpi-sub-kw">kW installed</div>
       </div>
       <div class="kpi kpi-teal">
         <div class="kpi-icon">📐</div>
         <div class="kpi-label">Avg Project Size</div>
         <div class="kpi-big" id="k-avg">—</div>
         <div class="kpi-filtered" id="kf-avg"></div>
-        <div class="kpi-sub">kW per project</div>
+        <div class="kpi-sub" id="kpi-sub-avg">kW per project</div>
       </div>
       <div class="kpi kpi-blue">
         <div class="kpi-icon">💰</div>
         <div class="kpi-label">Revenue</div>
         <div class="kpi-big" id="k-rev" style="font-size:20px;line-height:1.2">—</div>
         <div class="kpi-filtered" id="kf-rev"></div>
-        <div class="kpi-sub">Total Final Output</div>
+        <div class="kpi-sub" id="kpi-sub-rev">Total Final Output</div>
       </div>
       <div class="kpi kpi-amber">
         <div class="kpi-icon">🏗</div>
         <div class="kpi-label">COGS</div>
         <div class="kpi-big" id="k-cogs" style="font-size:20px;line-height:1.2">—</div>
         <div class="kpi-filtered" id="kf-cogs"></div>
-        <div class="kpi-sub">Installed COGS</div>
+        <div class="kpi-sub" id="kpi-sub-cogs">Installed COGS</div>
       </div>
       <div class="kpi kpi-emerald">
         <div class="kpi-icon">📊</div>
         <div class="kpi-label">GM%</div>
         <div class="kpi-big" id="k-gm">—</div>
         <div class="kpi-filtered" id="kf-gm"></div>
-        <div class="kpi-sub">Gross Margin</div>
+        <div class="kpi-sub" id="kpi-sub-gm">Gross Margin</div>
       </div>
     </div>
   </div>
@@ -829,20 +837,22 @@ td:has(+ td.c-cogs):not(.c-cogs){}
       <select class="fs" id="wf-city"  onchange="renderWpBenchmark()"><option value="">All Cities</option></select>
       <span class="fclr" onclick="clearWpFilters()">✕ Clear</span>
       <span class="fresults" id="wf-results"></span>
-      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+        <!-- GM% filter toggle -->
         <button id="wp-toggle" onclick="toggleWpGm()" style="
           display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;
           border:1.5px solid #fecdd3;background:#fff;color:#dc2626;font-size:12px;
-          font-weight:600;cursor:pointer;transition:all .15s" title="Toggle between all projects and GM% < 38%">
+          font-weight:600;cursor:pointer;transition:all .15s" title="Toggle GM% < 38% filter">
           <span id="wp-toggle-icon">🔴</span> <span id="wp-toggle-label">GM% &lt; 38% only</span>
         </button>
-        <div style="display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:600">
-          <span style="display:flex;align-items:center;gap:4px;background:#fef2f2;color:#dc2626;padding:3px 10px;border-radius:99px;border:1px solid #fecaca">
-            <span style="width:7px;height:7px;border-radius:50%;background:#dc2626;display:inline-block"></span> Over tolerance
-          </span>
-          <span style="display:flex;align-items:center;gap:4px;background:#dcfce7;color:#15803d;padding:3px 10px;border-radius:99px;border:1px solid #86efac">
-            <span style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block"></span> Within tolerance
-          </span>
+        <!-- Hybrid 3-way toggle -->
+        <div style="display:flex;align-items:center;border:1.5px solid #c7d2fe;border-radius:22px;overflow:hidden;font-size:11.5px;font-weight:700">
+          <button id="whf-all" onclick="setWpHybrid('all')"
+            style="padding:5px 13px;border:none;cursor:pointer;transition:all .15s;background:#6366f1;color:#fff;letter-spacing:.02em">All</button>
+          <button id="whf-hybrid" onclick="setWpHybrid('hybrid')"
+            style="padding:5px 13px;border:none;border-left:1.5px solid #c7d2fe;cursor:pointer;transition:all .15s;background:#fff;color:#6366f1;letter-spacing:.02em">⚡ Hybrid</button>
+          <button id="whf-nonhybrid" onclick="setWpHybrid('nonhybrid')"
+            style="padding:5px 13px;border:none;border-left:1.5px solid #c7d2fe;cursor:pointer;transition:all .15s;background:#fff;color:#6366f1;letter-spacing:.02em">Non-Hybrid</button>
         </div>
       </div>
     </div>
@@ -951,6 +961,8 @@ function ingest(txt,src){
   for(const [,items] of groups){
     const base={...items[0]};           // OMS project fields from first row
     Object.assign(base,computeCOGS(items)); // merge COGS aggregations
+    // Tag hybrid: any DN line item has item_category === 'Hybrid Inverter'
+    base._isHybrid = items.some(r=>(r['item_category']||'').trim()==='Hybrid Inverter');
     allRows.push(base);
   }
 
@@ -1155,28 +1167,54 @@ function fmtKW(v){return v>=1000?(v/1000).toFixed(1)+'K':v.toFixed(0);}
 function updateKPIs(filtStats){
   const t=totalStats, f=filtStats;
   const isFiltered=(f.count!==t.count);
-  const lbl=isFiltered?filterLabel():'';
 
   const fmtCr=v=>v>=1e7?'₹'+(v/1e7).toFixed(2)+' Cr':v>=1e5?'₹'+(v/1e5).toFixed(1)+' L':'₹'+Math.round(v).toLocaleString('en-IN');
   const fmtGm=v=>v===null?'—':(v*100).toFixed(1)+'%';
 
-  set('k-sse',   t.count.toLocaleString());
-  set('k-kw',    fmtKW(t.kw));
-  set('k-avg',   t.avg.toFixed(1));
-  set('k-rev',   fmtCr(t.rev));
-  set('k-cogs',  fmtCr(t.cogs));
-  set('k-gm',    fmtGm(t.gm));
+  // Main numbers always reflect current filter selection
+  const d = isFiltered ? f : t;
+  set('k-sse',  d.count.toLocaleString());
+  set('k-kw',   fmtKW(d.kw));
+  set('k-avg',  d.avg.toFixed(1));
+  set('k-rev',  fmtCr(d.rev));
+  set('k-cogs', fmtCr(d.cogs));
+  set('k-gm',   fmtGm(d.gm));
 
-  if(isFiltered){
-    setf('kf-sse',  '('+lbl+': '+f.count.toLocaleString()+')');
-    setf('kf-kw',   '('+lbl+': '+fmtKW(f.kw)+' kW)');
-    setf('kf-avg',  '('+lbl+': '+f.avg.toFixed(1)+' kW)');
-    setf('kf-rev',  '('+lbl+': '+fmtCr(f.rev)+')');
-    setf('kf-cogs', '('+lbl+': '+fmtCr(f.cogs)+')');
-    setf('kf-gm',   '('+lbl+': '+fmtGm(f.gm)+')');
-  } else {
-    ['kf-sse','kf-kw','kf-avg','kf-rev','kf-cogs','kf-gm'].forEach(id=>setf(id,''));
-  }
+  // Sub-label: show active filter tag when filtered, restore default when not
+  const activeFilters = [];
+  const mo = document.getElementById('fs-month')?.value;
+  const cy = document.getElementById('fs-city')?.value;
+  const sb = document.getElementById('fs-sizebucket')?.value;
+  const ot = document.getElementById('fs-offertype')?.value;
+  const qs = document.getElementById('fi-search')?.value.trim();
+  if(mo) activeFilters.push('Month: '+mo);
+  if(cy) activeFilters.push('City: '+cy);
+  if(sb) activeFilters.push('Bucket: '+sb);
+  if(ot) activeFilters.push('Offer: '+ot);
+  if(qs) activeFilters.push('"'+qs+'"');
+  const filterTag = activeFilters.length ? activeFilters.join(' · ') : '';
+
+  const defaults = {
+    'kpi-sub-sse' :'Unique projects',
+    'kpi-sub-kw'  :'kW installed',
+    'kpi-sub-avg' :'kW per project',
+    'kpi-sub-rev' :'Total Final Output',
+    'kpi-sub-cogs':'Installed COGS',
+    'kpi-sub-gm'  :'Gross Margin',
+  };
+  Object.entries(defaults).forEach(([id, defText])=>{
+    const el=document.getElementById(id); if(!el) return;
+    if(isFiltered && filterTag){
+      el.textContent = filterTag;
+      el.classList.add('is-filter');
+    } else {
+      el.textContent = defText;
+      el.classList.remove('is-filter');
+    }
+  });
+
+  // Clear the old filtered pills (no longer needed)
+  ['kf-sse','kf-kw','kf-avg','kf-rev','kf-cogs','kf-gm'].forEach(id=>setf(id,''));
 }
 function set(id,v){ document.getElementById(id).textContent=v; }
 function setf(id,v){ document.getElementById(id).textContent=v; }
@@ -1506,6 +1544,19 @@ const MON_NAMES = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 let monthBenchmarks = new Map(); // 'YYYYMM' → { Module, Inverter, MMS, Cable, Others }
 let wpMonthOrder = [];
 let wpGmFilter = false; // false = show all, true = GM% < 38% only
+let wpHybridFilter = 'all'; // 'all' | 'hybrid' | 'nonhybrid'
+
+function setWpHybrid(mode){
+  wpHybridFilter = mode;
+  const styles = {
+    active:   'background:#6366f1;color:#fff;',
+    inactive: 'background:#fff;color:#6366f1;'
+  };
+  document.getElementById('whf-all').style.cssText       = 'padding:5px 13px;border:none;cursor:pointer;transition:all .15s;letter-spacing:.02em;' + (mode==='all'       ? styles.active : styles.inactive);
+  document.getElementById('whf-hybrid').style.cssText    = 'padding:5px 13px;border:none;border-left:1.5px solid #c7d2fe;cursor:pointer;transition:all .15s;letter-spacing:.02em;' + (mode==='hybrid'    ? styles.active : styles.inactive);
+  document.getElementById('whf-nonhybrid').style.cssText = 'padding:5px 13px;border:none;border-left:1.5px solid #c7d2fe;cursor:pointer;transition:all .15s;letter-spacing:.02em;' + (mode==='nonhybrid' ? styles.active : styles.inactive);
+  renderWpBenchmark();
+}
 
 function toggleWpGm(){
   wpGmFilter = !wpGmFilter;
@@ -1677,6 +1728,8 @@ function renderWpBenchmark(){
     if(filterKey&&key!==filterKey) return false;
     if(filterCity&&r['City']!==filterCity) return false;
     if(wpGmFilter && !(r['GM %']!==null && r['GM %']<0.38)) return false;
+    if(wpHybridFilter==='hybrid'    &&  !r._isHybrid) return false;
+    if(wpHybridFilter==='nonhybrid' &&   r._isHybrid) return false;
     if(q){
       const h=[r['SSE ID'],r['Customer Name'],r['City']].join(' ').toLowerCase();
       if(!h.includes(q)) return false;
