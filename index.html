@@ -309,6 +309,18 @@ html,body{
   pointer-events:none;border-radius:inherit;
 }
 
+/* Emerald card */
+.kpi-emerald{
+  background:linear-gradient(145deg, #059669 0%, #064e3b 100%);
+  color:#fff;
+  box-shadow:0 4px 16px rgba(5,150,105,.28);
+}
+.kpi-emerald::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(145deg,rgba(255,255,255,.11) 0%,transparent 55%);
+  pointer-events:none;border-radius:inherit;
+}
+
 /* Amber card */
 .kpi-amber{
   background:linear-gradient(145deg, #f59e0b 0%, #92400e 100%);
@@ -745,26 +757,26 @@ td:has(+ td.c-cogs):not(.c-cogs){}
         <div class="kpi-filtered" id="kf-avg"></div>
         <div class="kpi-sub">kW per project</div>
       </div>
-      <div class="kpi kpi-navy">
-        <div class="kpi-icon">🏙</div>
-        <div class="kpi-label">Cities Covered</div>
-        <div class="kpi-big" id="k-cities">—</div>
-        <div class="kpi-filtered" id="kf-cities"></div>
-        <div class="kpi-sub">Unique cities</div>
+      <div class="kpi kpi-blue">
+        <div class="kpi-icon">💰</div>
+        <div class="kpi-label">Revenue</div>
+        <div class="kpi-big" id="k-rev" style="font-size:20px;line-height:1.2">—</div>
+        <div class="kpi-filtered" id="kf-rev"></div>
+        <div class="kpi-sub">Total Final Output</div>
       </div>
       <div class="kpi kpi-amber">
-        <div class="kpi-icon">🗺</div>
-        <div class="kpi-label">States</div>
-        <div class="kpi-big" id="k-states">—</div>
-        <div class="kpi-filtered" id="kf-states"></div>
-        <div class="kpi-sub">Unique states</div>
+        <div class="kpi-icon">🏗</div>
+        <div class="kpi-label">COGS</div>
+        <div class="kpi-big" id="k-cogs" style="font-size:20px;line-height:1.2">—</div>
+        <div class="kpi-filtered" id="kf-cogs"></div>
+        <div class="kpi-sub">Installed COGS</div>
       </div>
-      <div class="kpi kpi-slate">
-        <div class="kpi-icon">📅</div>
-        <div class="kpi-label">Latest Booking</div>
-        <div class="kpi-big" id="k-latest" style="font-size:18px;line-height:1.2">—</div>
-        <div class="kpi-filtered" id="kf-latest"></div>
-        <div class="kpi-sub">Most recent entry</div>
+      <div class="kpi kpi-emerald">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">GM%</div>
+        <div class="kpi-big" id="k-gm">—</div>
+        <div class="kpi-filtered" id="kf-gm"></div>
+        <div class="kpi-sub">Gross Margin</div>
       </div>
     </div>
   </div>
@@ -834,7 +846,29 @@ td:has(+ td.c-cogs):not(.c-cogs){}
         </div>
       </div>
     </div>
-    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
+    <!-- Summary table -->
+    <div id="wp-summary-wrap" style="margin:12px 24px 0;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
+      <div style="padding:8px 14px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#e0e7ff">GMI Summary</span>
+        <span style="font-size:9.5px;color:#a5b4fc;font-weight:500">Flash IDS = GM% &lt; 38%</span>
+      </div>
+      <table id="wp-summary-table" style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <thead>
+          <tr>
+            <th style="padding:6px 12px;text-align:left;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe;width:36px">Sr</th>
+            <th style="padding:6px 12px;text-align:left;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe">Category</th>
+            <th style="padding:6px 12px;text-align:right;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe"># IDS</th>
+            <th style="padding:6px 12px;text-align:right;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe">kWp</th>
+            <th style="padding:6px 12px;text-align:right;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe">Revenue</th>
+            <th style="padding:6px 12px;text-align:right;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe">COGS</th>
+            <th style="padding:6px 12px;text-align:center;font-size:8.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6366f1;background:#f5f3ff;border:1px solid #ddd6fe">GM%</th>
+          </tr>
+        </thead>
+        <tbody id="wp-summary-body"></tbody>
+      </table>
+    </div>
+
+    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:12px">
       <div class="flag-scroll">
         <table id="wp-table">
           <thead id="wp-head"></thead>
@@ -1101,19 +1135,19 @@ function pop(id,vals){
 // ── KPIs ──
 let totalStats={};
 function computeStats(rows){
-  const cities=new Set(rows.map(r=>r['City']).filter(Boolean));
-  const states=new Set(rows.map(r=>r['State']).filter(Boolean));
   const kws=rows.map(r=>parseFloat(r['Project Size (kW)']||0)).filter(n=>!isNaN(n));
   const totalKW=kws.reduce((a,b)=>a+b,0);
   const avgKW=kws.length?totalKW/kws.length:0;
-  const dates=rows.map(r=>r['Booking Date']).filter(Boolean).sort();
+  const totalRev=rows.reduce((s,r)=>s+(parseFloat(r['Final Output'])||0),0);
+  const totalCogs=rows.reduce((s,r)=>s+(parseFloat(r['Installed COGS'])||0),0);
+  const gm=totalRev>0?(totalRev-totalCogs)/totalRev:null;
   return{
     count:rows.length,
     kw:totalKW,
     avg:avgKW,
-    cities:cities.size,
-    states:states.size,
-    latest:dates.length?dates[dates.length-1]:'—'
+    rev:totalRev,
+    cogs:totalCogs,
+    gm:gm
   };
 }
 function fmtKW(v){return v>=1000?(v/1000).toFixed(1)+'K':v.toFixed(0);}
@@ -1123,22 +1157,25 @@ function updateKPIs(filtStats){
   const isFiltered=(f.count!==t.count);
   const lbl=isFiltered?filterLabel():'';
 
+  const fmtCr=v=>v>=1e7?'₹'+(v/1e7).toFixed(2)+' Cr':v>=1e5?'₹'+(v/1e5).toFixed(1)+' L':'₹'+Math.round(v).toLocaleString('en-IN');
+  const fmtGm=v=>v===null?'—':(v*100).toFixed(1)+'%';
+
   set('k-sse',   t.count.toLocaleString());
   set('k-kw',    fmtKW(t.kw));
   set('k-avg',   t.avg.toFixed(1));
-  set('k-cities',t.cities);
-  set('k-states',t.states);
-  set('k-latest',t.latest,'18px');
+  set('k-rev',   fmtCr(t.rev));
+  set('k-cogs',  fmtCr(t.cogs));
+  set('k-gm',    fmtGm(t.gm));
 
   if(isFiltered){
-    setf('kf-sse',   '('+lbl+': '+f.count.toLocaleString()+')');
-    setf('kf-kw',    '('+lbl+': '+fmtKW(f.kw)+' kW)');
-    setf('kf-avg',   '('+lbl+': '+f.avg.toFixed(1)+' kW)');
-    setf('kf-cities','('+lbl+': '+f.cities+' cities)');
-    setf('kf-states','('+lbl+': '+f.states+' states)');
-    setf('kf-latest','('+lbl+': '+f.latest+')');
+    setf('kf-sse',  '('+lbl+': '+f.count.toLocaleString()+')');
+    setf('kf-kw',   '('+lbl+': '+fmtKW(f.kw)+' kW)');
+    setf('kf-avg',  '('+lbl+': '+f.avg.toFixed(1)+' kW)');
+    setf('kf-rev',  '('+lbl+': '+fmtCr(f.rev)+')');
+    setf('kf-cogs', '('+lbl+': '+fmtCr(f.cogs)+')');
+    setf('kf-gm',   '('+lbl+': '+fmtGm(f.gm)+')');
   } else {
-    ['kf-sse','kf-kw','kf-avg','kf-cities','kf-states','kf-latest'].forEach(id=>setf(id,''));
+    ['kf-sse','kf-kw','kf-avg','kf-rev','kf-cogs','kf-gm'].forEach(id=>setf(id,''));
   }
 }
 function set(id,v){ document.getElementById(id).textContent=v; }
@@ -1656,6 +1693,7 @@ function renderWpBenchmark(){
   const el=document.getElementById('wf-results');
   if(el) el.textContent=rows.length.toLocaleString()+' projects';
 
+  renderWpSummary(rows);
   buildWpHeader();
   const frag=document.createDocumentFragment();
 
@@ -1792,6 +1830,76 @@ function renderWpBenchmark(){
   } else {
     tb.appendChild(frag);
   }
+}
+
+// ── WP Summary Table ──
+function renderWpSummary(rows){
+  const body=document.getElementById('wp-summary-body');
+  if(!body) return;
+
+  // Classify each row
+  const groups=[
+    {label:'NON Flash IDS', filter:r=>r['GM %']!==null&&r['GM %']!==undefined&&r['GM %']>=0.38,
+     bg:'#f0fdf4', cl:'#15803d', badge:'#d1fae5', badgeCl:'#15803d', badgeBrd:'#86efac'},
+    {label:'Flash IDS',     filter:r=>r['GM %']!==null&&r['GM %']!==undefined&&r['GM %']<0.38,
+     bg:'#fff5f5', cl:'#dc2626', badge:'#fee2e2', badgeCl:'#dc2626', badgeBrd:'#fca5a5'},
+    {label:'Blank IDS',     filter:r=>r['GM %']===null||r['GM %']===undefined,
+     bg:'#fafaf9', cl:'#78716c', badge:'#f5f5f4', badgeCl:'#78716c', badgeBrd:'#d6d3d1'},
+  ];
+
+  const fmt=n=>n?'₹'+Math.round(n).toLocaleString('en-IN'):'—';
+  const fmtKw=n=>n?n.toLocaleString('en-IN',{maximumFractionDigits:1}):'—';
+
+  let totalIds=0, totalKw=0, totalRev=0, totalCogs=0;
+
+  body.innerHTML='';
+
+  groups.forEach((g,i)=>{
+    const grp=rows.filter(g.filter);
+    const ids=grp.length;
+    const kw=grp.reduce((s,r)=>s+(parseFloat(r['Project Size (kW)'])||0),0);
+    const rev=grp.reduce((s,r)=>s+(parseFloat(r['Final Output'])||0),0);
+    const cogs=grp.reduce((s,r)=>s+(parseFloat(r['Installed COGS'])||0),0);
+    const gm=rev>0?(rev-cogs)/rev:null;
+    totalIds+=ids; totalKw+=kw; totalRev+=rev; totalCogs+=cogs;
+
+    const gmPill=gm===null
+      ?'<span style="color:#94a3b8;font-size:11px">—</span>'
+      :'<span style="font-weight:800;font-size:11.5px;color:'+g.badgeCl+';background:'+g.badge
+        +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+g.badgeBrd+'">'+(gm*100).toFixed(1)+'%</span>';
+
+    const tr=document.createElement('tr');
+    tr.style.background=g.bg;
+    tr.innerHTML=
+      '<td style="padding:6px 12px;font-weight:700;color:#334155;border:1px solid #e2e8f0;text-align:center">'+(i+1)+'</td>'
+      +'<td style="padding:6px 12px;font-weight:700;color:'+g.cl+';border:1px solid #e2e8f0">'+g.label+'</td>'
+      +'<td style="padding:6px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+ids.toLocaleString()+'</td>'
+      +'<td style="padding:6px 12px;text-align:right;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+fmtKw(kw)+'</td>'
+      +'<td style="padding:6px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(rev)+'</td>'
+      +'<td style="padding:6px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(cogs)+'</td>'
+      +'<td style="padding:6px 12px;text-align:center;border:1px solid #e2e8f0">'+gmPill+'</td>';
+    body.appendChild(tr);
+  });
+
+  // Total row
+  const totalGm=totalRev>0?((totalRev-totalCogs)/totalRev):null;
+  const totalGmPill=totalGm===null
+    ?'<span style="color:#94a3b8">—</span>'
+    :'<span style="font-weight:800;font-size:11.5px;color:'+(totalGm>=0.38?'#15803d':'#dc2626')
+      +';background:'+(totalGm>=0.38?'#d1fae5':'#fee2e2')
+      +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+(totalGm>=0.38?'#86efac':'#fca5a5')+'">'+((totalGm*100).toFixed(1))+'%</span>';
+
+  const trTotal=document.createElement('tr');
+  trTotal.style.cssText='background:linear-gradient(90deg,#f8fafc,#eef2ff);border-top:2px solid #c7d2fe';
+  trTotal.innerHTML=
+    '<td style="padding:7px 12px;font-weight:800;color:#334155;border:1px solid #c7d2fe;text-align:center">—</td>'
+    +'<td style="padding:7px 12px;font-weight:800;letter-spacing:.03em;color:#3730a3;border:1px solid #c7d2fe">TOTAL</td>'
+    +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+totalIds.toLocaleString()+'</td>'
+    +'<td style="padding:7px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmtKw(totalKw)+'</td>'
+    +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#1e40af;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmt(totalRev)+'</td>'
+    +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#1e40af;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmt(totalCogs)+'</td>'
+    +'<td style="padding:7px 12px;text-align:center;border:1px solid #c7d2fe">'+totalGmPill+'</td>';
+  body.appendChild(trTotal);
 }
 
 // ── Download CSV ──
