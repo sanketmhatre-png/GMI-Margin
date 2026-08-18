@@ -915,10 +915,29 @@ const COGS_AMT_COLS = COLS.filter(c => c.startsWith('COGS:'));
 
 let allRows=[], filtered=[], sortCol=null, sortDir=1;
 
+// ── Virtual pagination state ──
+const PAGE_SIZE = 300;    // rows rendered initially
+const PAGE_MORE = 200;    // rows appended per scroll trigger
+let _visibleRows = [];    // current sorted rows for main table
+let _renderedCount = 0;   // how many rows currently in DOM
+
+// ── Debounce helper ──
+function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+// ── yield to browser between heavy batches ──
+const yieldToBrowser = () => new Promise(r => setTimeout(r, 0));
+
 // Auto-load
 addEventListener('load', () => {
   // Ensure main tab is active on start (main-view must not have .hidden)
   document.getElementById('main-view').classList.remove('hidden');
+  // Wire up scroll-to-load-more on the main table
+  document.getElementById('tbl-scroll').addEventListener('scroll', function(){
+    if(_renderedCount >= _visibleRows.length) return;
+    if(this.scrollTop + this.clientHeight >= this.scrollHeight - 300){
+      _appendRows(PAGE_MORE);
+    }
+  });
   loadGH();
 });
 
@@ -946,28 +965,46 @@ function refreshData(){
   loadGH().finally(()=>{ btn.disabled=false; btn.textContent='🔄 Refresh'; });
 }
 
-// ── Ingest ──
-function ingest(txt,src){
+// ── Ingest (async — yields between heavy phases so browser stays responsive) ──
+async function ingest(txt,src){
+  showOv('Parsing rows…');
+  await yieldToBrowser();
+
   const {rows}=parseCSV(txt);
-  // Group ALL rows by SSE ID (CSV has one row per DN line item)
+
+  // Phase 1: Group DN lines by SSE ID in chunks
+  showOv('Grouping '+rows.length.toLocaleString()+' DN lines…');
   const groups=new Map();
-  for(const r of rows){
-    const id=(r['SSE ID']||'').trim();
-    if(!id) continue;
-    if(!groups.has(id)) groups.set(id,[]);
-    groups.get(id).push(r);
-  }
-  allRows=[];
-  for(const [,items] of groups){
-    const base={...items[0]};           // OMS project fields from first row
-    Object.assign(base,computeCOGS(items)); // merge COGS aggregations
-    // Tag hybrid: any DN line item has item_category === 'Hybrid Inverter'
-    base._isHybrid = items.some(r=>(r['item_category']||'').trim()==='Hybrid Inverter');
-    allRows.push(base);
+  const CHUNK=2000;
+  for(let i=0;i<rows.length;i+=CHUNK){
+    for(let j=i;j<Math.min(i+CHUNK,rows.length);j++){
+      const r=rows[j];
+      const id=(r['SSE ID']||'').trim();
+      if(!id) continue;
+      if(!groups.has(id)) groups.set(id,[]);
+      groups.get(id).push(r);
+    }
+    if(i%10000===0&&i>0){ showOv('Grouping… '+(i/rows.length*100|0)+'%'); await yieldToBrowser(); }
   }
 
-  // ── I&C KIT: split total by City + Installation Month equally across projects ──
-  // e.g. Pune July total ₹10k across 10 projects → ₹1k each
+  // Phase 2: Build allRows with COGS aggregation in chunks
+  showOv('Computing COGS for '+groups.size.toLocaleString()+' projects…');
+  await yieldToBrowser();
+  allRows=[];
+  let gi=0;
+  for(const [,items] of groups){
+    const base={...items[0]};
+    Object.assign(base,computeCOGS(items));
+    base._isHybrid = items.some(r=>(r['item_category']||'').trim()==='Hybrid Inverter');
+    base._search = [base['SSE ID'],base['Customer Name'],base['City'],base['State'],base['Booking Type'],base['Tagg 2']].join(' ').toLowerCase();
+    allRows.push(base);
+    gi++;
+    if(gi%1000===0){ showOv('Computing COGS… '+(gi/groups.size*100|0)+'%'); await yieldToBrowser(); }
+  }
+
+  // Phase 3: I&C KIT redistribution
+  showOv('Redistributing I&C KIT costs…');
+  await yieldToBrowser();
   const icGroups=new Map();
   for(const row of allRows){
     const city=(row['City']||'').trim();
@@ -984,7 +1021,9 @@ function ingest(txt,src){
     for(const row of g.rows) row['COGS: I&C KIT']=avg;
   }
 
-  // ── Installed COGS = sum of all COGS amount columns ──
+  // Phase 4: Final GM% pass
+  showOv('Calculating GM%…');
+  await yieldToBrowser();
   for(const row of allRows){
     const installedCOGS = COGS_AMT_COLS.reduce((s,c)=>s+(Number(row[c])||0), 0);
     const installedRev  = parseFloat(row['Final Output'])||0;
@@ -992,10 +1031,12 @@ function ingest(txt,src){
     row['GM %'] = installedRev ? (1 - installedCOGS / installedRev) : null;
   }
 
+  showOv('Building table…');
+  await yieldToBrowser();
   buildFilters();
   buildHeader();
-  applyFilters(true);   // true = first load, compute totals
-  updateFlagBadge();    // update flagged count badge + pre-build header
+  applyFilters(true);
+  updateFlagBadge();
   hideOv();
   setDot('ok','Live · '+allRows.length.toLocaleString()+' records from '+src);
   document.getElementById('btn-dl').disabled = false;
@@ -1122,9 +1163,11 @@ function buildFilters(){
   pop('fs-city',      uniq('City'));
   pop('fs-sizebucket',uniq('Size Bucket'));
   pop('fs-offertype', uniq('Offer Type'));
-  ['fi-search','fs-month','fs-city','fs-sizebucket','fs-offertype'].forEach(id=>{
-    const el=document.getElementById(id);
-    el.oninput=el.onchange=()=>{applyFilters();};
+  const _debouncedApply = debounce(applyFilters, 200);
+  // Debounce text search; dropdowns fire instantly (low cost)
+  document.getElementById('fi-search').oninput = _debouncedApply;
+  ['fs-month','fs-city','fs-sizebucket','fs-offertype'].forEach(id=>{
+    document.getElementById(id).onchange = ()=>applyFilters();
   });
   document.getElementById('fclr').onclick=()=>{
     document.getElementById('fi-search').value='';
@@ -1241,18 +1284,14 @@ function applyFilters(init=false){
     if(cy&&r['City']!==cy)return false;
     if(sb&&r['Size Bucket']!==sb)return false;
     if(ot&&r['Offer Type']!==ot)return false;
-    if(q){
-      const h=[r['SSE ID'],r['Customer Name'],r['City'],r['State'],r['Booking Type'],r['Tagg 2']].join(' ').toLowerCase();
-      if(!h.includes(q))return false;
-    }
+    if(q && !r._search.includes(q)) return false;
     return true;
   });
 
   if(init) totalStats=computeStats(allRows);
   updateKPIs(computeStats(filtered));
   document.getElementById('fresults').textContent=filtered.length.toLocaleString()+' records';
-  document.getElementById('tbl-count').textContent=filtered.length.toLocaleString()+' rows';
-  renderTable();
+  renderTable(); // tbl-count is set inside renderTable / _appendRows
 }
 
 // ── Build header ──
@@ -1275,22 +1314,10 @@ function buildHeader(){
   document.getElementById('t-head').appendChild(tr);
 }
 
-// ── Render (all rows, virtual scroll not needed as browser handles it) ──
-function renderTable(){
-  const rows=[...filtered];
-  if(sortCol){
-    rows.sort((a,b)=>{
-      const av=a[sortCol]||'',bv=b[sortCol]||'';
-      const an=parseFloat(av),bn=parseFloat(bv);
-      if(!isNaN(an)&&!isNaN(bn))return(an-bn)*sortDir;
-      return av.localeCompare(bv)*sortDir;
-    });
-  }
-
-  const frag=document.createDocumentFragment();
-  for(const row of rows){
-    const tr=document.createElement('tr');
-    for(const col of COLS){
+// ── Row builder (shared by initial render and append-on-scroll) ──
+function _buildRow(row){
+  const tr=document.createElement('tr');
+  for(const col of COLS){
       const td=document.createElement('td');
       const v=(row[col]==null?'':String(row[col])).trim();
       if(col==='Kitts'){
@@ -1335,20 +1362,49 @@ function renderTable(){
       else{td.textContent=v;td.title=v;}
       tr.appendChild(td);
     }
-    frag.appendChild(tr);
+  return tr;
+}
+
+// ── Append next batch of rows into tbody ──
+function _appendRows(count){
+  const end=Math.min(_renderedCount+count, _visibleRows.length);
+  if(_renderedCount>=end) return;
+  const frag=document.createDocumentFragment();
+  for(let i=_renderedCount;i<end;i++) frag.appendChild(_buildRow(_visibleRows[i]));
+  document.getElementById('t-body').appendChild(frag);
+  _renderedCount=end;
+  // Update row-count label to show what's visible vs total
+  const total=_visibleRows.length;
+  document.getElementById('tbl-count').textContent=
+    _renderedCount<total
+      ? _renderedCount.toLocaleString()+' of '+total.toLocaleString()+' rows (scroll for more)'
+      : total.toLocaleString()+' rows';
+}
+
+// ── Render table — only first PAGE_SIZE rows; rest load on scroll ──
+function renderTable(){
+  _visibleRows=[...filtered];
+  if(sortCol){
+    _visibleRows.sort((a,b)=>{
+      const av=a[sortCol]||'',bv=b[sortCol]||'';
+      const an=parseFloat(av),bn=parseFloat(bv);
+      if(!isNaN(an)&&!isNaN(bn)) return(an-bn)*sortDir;
+      return av.localeCompare(bv)*sortDir;
+    });
   }
+  _renderedCount=0;
   const tb=document.getElementById('t-body');
   tb.innerHTML='';
-  if(rows.length===0){
+  if(_visibleRows.length===0){
     const tr=document.createElement('tr');
     const td=document.createElement('td');
     td.colSpan=COLS.length;td.style.cssText='text-align:center;padding:48px;color:#94a3b8;font-size:13px';
     td.textContent='No records match the current filters.';
     tr.appendChild(td);tb.appendChild(tr);
+    document.getElementById('tbl-count').textContent='0 rows';
   } else {
-    tb.appendChild(frag);
+    _appendRows(PAGE_SIZE);
   }
-  // Scroll back to top when filters change
   document.getElementById('tbl-scroll').scrollTop=0;
 }
 
