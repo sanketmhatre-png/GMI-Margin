@@ -156,11 +156,15 @@ tbody tr:hover{background:var(--row-hover)}
 tbody tr:last-child{border-bottom:none}
 td{padding:9px 14px;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
 td.c-sse{font-weight:700;color:var(--accent);font-size:12px}
+td.c-kitts{background:#fff7ed;color:#c2410c;font-weight:700;font-variant-numeric:tabular-nums;font-size:12px;border-left:2px solid #fed7aa;border-right:2px solid #fed7aa}
+thead th[data-col="Kitts"]{background:#fff7ed;color:#c2410c;border-left:2px solid #fed7aa}
 
 /* COGS cells */
 td.c-cogs{font-variant-numeric:tabular-nums;color:#1e40af;font-weight:600;font-size:12px}
 td.c-cogs-desc{color:var(--text2);font-size:11.5px;max-width:220px;white-space:normal;line-height:1.3}
-thead th[data-col^="COGS:"]{background:#f0f4ff;color:#1e40af;border-left:2px solid #c7d7ff}
+thead th[data-col^="COGS:"],thead th[data-col="Final Output"],
+thead th[data-col="Installed COGS"]{background:#f0f4ff;color:#1e40af;border-left:2px solid #c7d7ff}
+thead th[data-col="GM %"]{background:#f0fdf4;color:#15803d;border-left:2px solid #86efac;font-size:11px}
 thead th[data-col^="COGS:"]:first-of-type{border-left:2px solid #93b4fd}
 td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
 
@@ -197,8 +201,71 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
 }
 .toast.show{transform:translateY(0);opacity:1;pointer-events:auto}
 
+/* ── TABS ── */
+.tab-nav{
+  display:flex;align-items:center;gap:2px;
+  background:var(--card);border-bottom:2px solid var(--border);
+  padding:0 24px;flex-shrink:0;
+}
+.tab-btn{
+  display:flex;align-items:center;gap:7px;
+  padding:11px 18px;font-size:12.5px;font-weight:600;
+  color:var(--text2);cursor:pointer;border:none;background:none;
+  border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:color .15s,border-color .15s;
+}
+.tab-btn:hover{color:var(--accent)}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-btn .tab-badge{
+  background:#fee2e2;color:#dc2626;
+  font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;
+}
+.tab-btn.active .tab-badge{background:#dc2626;color:#fff}
+
+/* ── FLAGGED PAGE ── */
+.flag-page{display:none;flex:1;min-height:0;flex-direction:column;overflow:hidden}
+.flag-page.visible{display:flex}
+.flag-banner{
+  margin:16px 24px 0;padding:14px 20px;
+  background:linear-gradient(135deg,#fef2f2,#fff5f5);
+  border:1px solid #fecdd3;border-radius:10px;
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+}
+.flag-banner-icon{font-size:22px}
+.flag-banner-text h3{font-size:13px;font-weight:700;color:#9f1239;margin-bottom:2px}
+.flag-banner-text p{font-size:11.5px;color:#be123c;opacity:.85}
+.flag-banner-count{margin-left:auto;font-size:24px;font-weight:800;color:#dc2626;font-variant-numeric:tabular-nums}
+.flag-banner-count span{font-size:11px;font-weight:500;color:#be123c;display:block;text-align:right}
+
+.flag-wrap{
+  margin:12px 24px 16px;background:#fff;border:1px solid var(--border);border-radius:12px;
+  display:flex;flex-direction:column;overflow:hidden;flex:1;min-height:0;
+}
+.flag-scroll{overflow:auto;flex:1;min-height:0}
+.flag-scroll::-webkit-scrollbar{width:6px;height:6px}
+.flag-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* flag table */
+.flag-wrap table{width:100%;border-collapse:collapse;font-size:12.5px}
+.flag-wrap thead th{
+  background:#fff;position:sticky;top:0;z-index:5;
+  padding:10px 14px;text-align:left;
+  font-size:10px;font-weight:700;color:var(--text3);
+  text-transform:uppercase;letter-spacing:.06em;
+  border-bottom:2px solid var(--border);white-space:nowrap;
+}
+.flag-wrap tbody tr{border-bottom:1px solid #f0f2f8;transition:background .07s}
+.flag-wrap tbody tr:nth-child(even){background:#fafbff}
+.flag-wrap tbody tr:hover{background:#fff5f5}
+.flag-wrap td{padding:9px 14px;white-space:nowrap}
+.flag-wrap td.gm-bad{font-weight:800;color:#dc2626}
+.flag-wrap td.gm-warn{font-weight:800;color:#d97706}
+.flag-wrap td.c-rev{font-weight:600;color:#1e40af;font-variant-numeric:tabular-nums}
+
 /* ── PAGE LAYOUT ── */
 .page{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.main-view{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.main-view.hidden{display:none}
 </style>
 </head>
 <body>
@@ -245,6 +312,23 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
       </button>
     </div>
   </header>
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-main" onclick="switchTab('main')">
+      📊 SSE ID Analysis
+    </button>
+    <button class="tab-btn" id="tab-flagged" onclick="switchTab('flagged')">
+      🚨 Flagged Projects
+      <span class="tab-badge" id="flag-badge">0</span>
+    </button>
+    <button class="tab-btn" id="tab-analysis" onclick="switchTab('analysis')">
+      📈 Analysis
+    </button>
+  </div>
+
+  <!-- Main view wrapper -->
+  <div class="main-view" id="main-view">
 
   <!-- Filter bar -->
   <div class="fbar">
@@ -321,6 +405,64 @@ td:has(+ td.c-cogs):not(.c-cogs){} /* spacer handled via th border */
     </div>
   </div>
 
+  </div><!-- end .main-view -->
+
+  <!-- Flagged Projects Page -->
+  <div class="flag-page" id="flag-page">
+    <div class="flag-banner">
+      <div class="flag-banner-icon">🚨</div>
+      <div class="flag-banner-text">
+        <h3>Projects with Low GM%</h3>
+        <p>Projects below 37% gross margin — review COGS and pricing to protect profitability</p>
+      </div>
+      <div class="flag-banner-count">
+        <span id="flag-count-num">0</span>
+        <span>flagged projects</span>
+      </div>
+    </div>
+    <!-- Flagged filters -->
+    <div class="fbar" style="border-top:none;border-bottom:1px solid var(--border);margin:8px 24px 0;border-radius:10px 10px 0 0">
+      <span class="fbar-label">Filters</span>
+      <input type="text" class="fi" id="ff-search" placeholder="Search SSE ID, customer, city…" style="min-width:200px" oninput="renderFlagged()"/>
+      <div class="fsep"></div>
+      <select class="fs" id="ff-city" onchange="renderFlagged()"><option value="">All Cities</option></select>
+      <select class="fs" id="ff-month" onchange="renderFlagged()"><option value="">All Months</option></select>
+      <select class="fs" id="ff-offertype" onchange="renderFlagged()"><option value="">All Offer Types</option></select>
+      <span class="fclr" onclick="clearFlagFilters()">✕ Clear</span>
+      <span class="fresults" id="ff-results"></span>
+    </div>
+    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
+      <div class="flag-scroll">
+        <table>
+          <thead id="flag-head"></thead>
+          <tbody id="flag-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analysis Page -->
+  <div class="flag-page" id="analysis-page">
+    <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
+      <span class="fbar-label">Filters</span>
+      <input type="text" class="fi" id="af-search" placeholder="Search SSE ID, customer, city…" style="min-width:200px" oninput="renderAnalysis()"/>
+      <div class="fsep"></div>
+      <select class="fs" id="af-city"      onchange="renderAnalysis()"><option value="">All Cities</option></select>
+      <select class="fs" id="af-month"     onchange="renderAnalysis()"><option value="">All Months</option></select>
+      <select class="fs" id="af-offertype" onchange="renderAnalysis()"><option value="">All Offer Types</option></select>
+      <span class="fclr" onclick="clearAnalysisFilters()">✕ Clear</span>
+      <span class="fresults" id="af-results"></span>
+    </div>
+    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
+      <div class="flag-scroll">
+        <table>
+          <thead id="analysis-head"></thead>
+          <tbody id="analysis-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div><!-- end .page -->
 
 <script>
@@ -331,7 +473,7 @@ const COLS = [
   'Financial Quarter','Customer Name','City','State','Project Size (kW)',
   'Size Bucket','Offer Type','Phase Connection','Finance Mode / Payment Schedule',
   'Final Output',
-  'BOM Details Type 1','BOM Details Type 2','BOM Details Type 3','BOM Details Type 4',
+  // BOM Details & Kitts moved to Analysis tab
   // ── COGS ──
   'COGS: Module','COGS: Inverter','COGS: Cables','COGS: Prefab MMS',
   'COGS: Conduit Pipe','COGS: Electrical BoS','COGS: Earthing & LA',
@@ -339,14 +481,21 @@ const COLS = [
   'COGS: Tin Shed MMS','COGS: Welded MMS','COGS: I&C KIT',
   'COGS: Safety','COGS: Civil Work','COGS: Data Logger',
   'COGS: Ladder','COGS: Welcome Kit & Board','COGS: Module LC',
-  'COGS: Metering','COGS: Inverter Desc'
+  'COGS: Metering',
+  // ── Summary ──
+  'Installed COGS','GM %'
 ];
 const COGS_COLS = new Set(COLS.filter(c => c.startsWith('COGS:')));
+const COGS_AMT_COLS = COLS.filter(c => c.startsWith('COGS:'));
 
 let allRows=[], filtered=[], sortCol=null, sortDir=1;
 
 // Auto-load
-addEventListener('load', () => loadGH());
+addEventListener('load', () => {
+  // Ensure main tab is active on start (main-view must not have .hidden)
+  document.getElementById('main-view').classList.remove('hidden');
+  loadGH();
+});
 
 // ── Load GitHub ──
 async function loadGH(){
@@ -404,13 +553,22 @@ function ingest(txt,src){
     g.rows.push(row);
   }
   for(const g of icGroups.values()){
-    const avg=g.count>0?g.total/g.count:0;
+    const avg=g.count>0?Math.round(g.total/g.count):0;
     for(const row of g.rows) row['COGS: I&C KIT']=avg;
+  }
+
+  // ── Installed COGS = sum of all COGS amount columns ──
+  for(const row of allRows){
+    const installedCOGS = COGS_AMT_COLS.reduce((s,c)=>s+(Number(row[c])||0), 0);
+    const installedRev  = parseFloat(row['Final Output'])||0;
+    row['Installed COGS'] = Math.round(installedCOGS);
+    row['GM %'] = installedRev ? (1 - installedCOGS / installedRev) : null;
   }
 
   buildFilters();
   buildHeader();
   applyFilters(true);   // true = first load, compute totals
+  updateFlagBadge();    // update flagged count badge + pre-build header
   hideOv();
   setDot('ok','Live · '+allRows.length.toLocaleString()+' records from '+src);
   document.getElementById('btn-dl').disabled = false;
@@ -443,12 +601,13 @@ function computeCOGS(items){
   let module_=0,inverter=0,cables=0,prefabMMS=0,conduitPipe=0;
   let electricalBoS=0,earthingLA=0,ssNBW=0,icAcc=0,junctionBox=0;
   let tinShedMMS=0,weldedMMS=0,icKit=0,safety=0,civilWork=0;
-  let dataLogger=0,ladder=0,welcomeKit=0,moduleLCRaw=0;
+  let dataLogger=0,ladder=0,welcomeKit=0,moduleLCRaw=0,moduleQty=0,installedKitts=0;
   const invDescs=[];
+  const itemCode = r => (fld(r,'item_code','Item Code','item_Code')||'').trim();
 
   for(const r of items){
     const c=cat(r), a=amt(r), n=name(r), rt=rate(r), q=qty(r), d=desc(r);
-    if(c==='Module')                                                         module_+=a;
+    if(c==='Module'){                                                          module_+=a; moduleQty+=q; }
     if(['Inverter','Hybrid Inverter','Inverter Cluster'].includes(c)){       inverter+=a; if(d&&!invDescs.includes(d))invDescs.push(d); }
     if(['AC Cable','DC Cable','Cables','2C Cu Arm AC Cable'].includes(c))    cables+=a;
     if(c==='Prefab MMS')                                                     prefabMMS+=a;
@@ -465,6 +624,7 @@ function computeCOGS(items){
     if(c==='Civil Work')                                                     civilWork+=a;
     if(c==='Data Logger')                                                    dataLogger+=a;
     if(LADDER_NAMES.has(n))                                                  ladder+=a;
+    if(itemCode(r)==='KITS-0071')                                            installedKitts+=q;
     if(c==='Marketing')                                                      welcomeKit+=a;
     else if(c==='Fixtures and Tools'&&!LADDER_NAMES.has(n))                  welcomeKit+=a;
     // Module LC raw (qty × watts, rate-gated)
@@ -474,29 +634,34 @@ function computeCOGS(items){
 
   // Apply installation-month multiplier to Module LC
   const moduleLC = moduleLCRaw * lcMultiplier;
+  const r0 = v => Math.round(v); // round to whole rupees
+
+  // Kitts = (qty of modules × 4) + 5%  → rounded
+  const kitts = Math.round(moduleQty * 4 * 1.05);
 
   return{
-    'COGS: Module':              module_,
-    'COGS: Inverter':            inverter,
-    'COGS: Cables':              cables,
-    'COGS: Prefab MMS':          prefabMMS,
-    'COGS: Conduit Pipe':        conduitPipe,
-    'COGS: Electrical BoS':      electricalBoS,
-    'COGS: Earthing & LA':       earthingLA,
-    'COGS: SS NBW':              ssNBW,
-    'COGS: I&C Accessories':     icAcc,
-    'COGS: Junction Box':        junctionBox,
-    'COGS: Tin Shed MMS':        tinShedMMS,
-    'COGS: Welded MMS':          weldedMMS,
-    'COGS: I&C KIT':             icKit,
-    'COGS: Safety':              safety,
-    'COGS: Civil Work':          civilWork,
-    'COGS: Data Logger':         dataLogger,
-    'COGS: Ladder':              ladder,
-    'COGS: Welcome Kit & Board': welcomeKit,
-    'COGS: Module LC':           moduleLC,
-    'COGS: Metering':            meteringVal,
-    'COGS: Inverter Desc':       invDescs.join(' | ')
+    'Installed Kitts':           Math.round(installedKitts),
+    'Kitts':                     kitts,
+    'COGS: Module':              r0(module_),
+    'COGS: Inverter':            r0(inverter),
+    'COGS: Cables':              r0(cables),
+    'COGS: Prefab MMS':          r0(prefabMMS),
+    'COGS: Conduit Pipe':        r0(conduitPipe),
+    'COGS: Electrical BoS':      r0(electricalBoS),
+    'COGS: Earthing & LA':       r0(earthingLA),
+    'COGS: SS NBW':              r0(ssNBW),
+    'COGS: I&C Accessories':     r0(icAcc),
+    'COGS: Junction Box':        r0(junctionBox),
+    'COGS: Tin Shed MMS':        r0(tinShedMMS),
+    'COGS: Welded MMS':          r0(weldedMMS),
+    'COGS: I&C KIT':             r0(icKit),
+    'COGS: Safety':              r0(safety),
+    'COGS: Civil Work':          r0(civilWork),
+    'COGS: Data Logger':         r0(dataLogger),
+    'COGS: Ladder':              r0(ladder),
+    'COGS: Welcome Kit & Board': r0(welcomeKit),
+    'COGS: Module LC':           r0(moduleLC),
+    'COGS: Metering':            r0(meteringVal)
   };
 }
 
@@ -639,7 +804,8 @@ function buildHeader(){
   const tr=document.createElement('tr');
   COLS.forEach(col=>{
     const th=document.createElement('th');
-    th.textContent=col.startsWith('COGS: ')?col.replace('COGS: ',''):col;
+    const label=col==='Final Output'?'Installed Revenue':col.startsWith('COGS: ')?col.replace('COGS: ',''):col;
+    th.textContent=label;
     th.dataset.col=col;
     th.onclick=()=>{
       if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
@@ -671,8 +837,35 @@ function renderTable(){
     for(const col of COLS){
       const td=document.createElement('td');
       const v=(row[col]==null?'':String(row[col])).trim();
-      if(col==='SSE ID'){td.className='c-sse';td.textContent=v;}
+      if(col==='Kitts'){
+        const n=Number(v)||0;
+        td.className='c-kitts';
+        td.textContent=n||'—';
+        td.title='Kitts = (module qty × 4) + 5% = '+n;
+      }
+      else if(col==='SSE ID'){td.className='c-sse';td.textContent=v;}
       else if(col==='Booking Type'&&v){td.innerHTML='<span class="badge '+bookBadge(v)+'">'+v+'</span>';}
+      else if(col==='Final Output'){
+        const n=parseFloat(v)||0;
+        td.className='c-cogs';
+        td.textContent=n?'₹'+Math.round(n).toLocaleString('en-IN'):'—';
+        td.title='Installed Revenue: ₹'+Math.round(n).toLocaleString('en-IN');
+      }
+      else if(col==='Installed COGS'){
+        const n=Number(v)||0;
+        td.className='c-cogs';
+        td.textContent=n?'₹'+n.toLocaleString('en-IN'):'—';
+        td.title='Installed COGS: ₹'+n.toLocaleString('en-IN');
+      }
+      else if(col==='GM %'){
+        const n=parseFloat(v);
+        if(isNaN(n)||v===''||v===null){td.textContent='—';td.style.color='#94a3b8';}
+        else{
+          const pct=(n*100).toFixed(1)+'%';
+          const color=n>=0.20?'#15803d':n>=0.10?'#d97706':'#dc2626';
+          td.innerHTML='<span style="font-weight:700;color:'+color+'">'+pct+'</span>';
+        }
+      }
       else if(COGS_COLS.has(col)){
         if(col==='COGS: Inverter Desc'){td.textContent=v;td.title=v;td.className='c-cogs-desc';}
         else{
@@ -710,6 +903,291 @@ function bookBadge(v){
   if(u.includes('CASH'))return'b-cash';
   if(u.includes('EMI'))return'b-emi';
   return'b-def';
+}
+
+// ── Tab navigation ──
+function switchTab(tab){
+  const mainView    = document.getElementById('main-view');
+  const flagPage    = document.getElementById('flag-page');
+  const analysisPage= document.getElementById('analysis-page');
+  const tabMain     = document.getElementById('tab-main');
+  const tabFlagged  = document.getElementById('tab-flagged');
+  const tabAnalysis = document.getElementById('tab-analysis');
+
+  // Hide all
+  mainView.classList.add('hidden');
+  flagPage.classList.remove('visible');
+  analysisPage.classList.remove('visible');
+  [tabMain, tabFlagged, tabAnalysis].forEach(b => b.classList.remove('active'));
+
+  if(tab === 'main'){
+    mainView.classList.remove('hidden');
+    tabMain.classList.add('active');
+  } else if(tab === 'flagged'){
+    flagPage.classList.add('visible');
+    tabFlagged.classList.add('active');
+    renderFlagged();
+  } else if(tab === 'analysis'){
+    analysisPage.classList.add('visible');
+    tabAnalysis.classList.add('active');
+    renderAnalysis();
+  }
+}
+
+// ── Flagged Projects ──
+const FLAG_COLS = [
+  'SSE ID',
+  'Installation Completion Date',
+  'Customer Name',
+  'City',
+  'Project Size (kW)',
+  'Offer Type',
+  'Final Output',      // rendered as "Installed Revenue"
+  'Installed COGS',
+  'GM %'
+];
+
+function buildFlagHeader(){
+  const tr = document.createElement('tr');
+  FLAG_COLS.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col;
+    tr.appendChild(th);
+  });
+  document.getElementById('flag-head').innerHTML = '';
+  document.getElementById('flag-head').appendChild(tr);
+}
+
+function buildFlagFilters(){
+  // Populate dropdowns from flagged set only
+  const base = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37);
+  const cities   = [...new Set(base.map(r=>(r['City']||'').trim()).filter(Boolean))].sort();
+  const months   = [...new Set(base.map(r=>(r['Month']||'').trim()).filter(Boolean))].sort();
+  const offers   = [...new Set(base.map(r=>(r['Offer Type']||'').trim()).filter(Boolean))].sort();
+  const popSel = (id, vals) => {
+    const sel = document.getElementById(id);
+    const ph  = sel.options[0].text;
+    sel.innerHTML = '<option value="">'+ph+'</option>';
+    vals.forEach(v=>{ const o=document.createElement('option'); o.value=o.textContent=v; sel.appendChild(o); });
+  };
+  popSel('ff-city',      cities);
+  popSel('ff-month',     months);
+  popSel('ff-offertype', offers);
+}
+
+function clearFlagFilters(){
+  document.getElementById('ff-search').value = '';
+  ['ff-city','ff-month','ff-offertype'].forEach(id => document.getElementById(id).value = '');
+  renderFlagged();
+}
+
+function renderFlagged(){
+  const q  = (document.getElementById('ff-search')?.value||'').toLowerCase();
+  const cy = document.getElementById('ff-city')?.value||'';
+  const mo = document.getElementById('ff-month')?.value||'';
+  const ot = document.getElementById('ff-offertype')?.value||'';
+
+  let flagged = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37);
+  if(cy) flagged = flagged.filter(r => r['City']===cy);
+  if(mo) flagged = flagged.filter(r => r['Month']===mo);
+  if(ot) flagged = flagged.filter(r => r['Offer Type']===ot);
+  if(q)  flagged = flagged.filter(r => {
+    const h = [r['SSE ID'],r['Customer Name'],r['City'],r['State']].join(' ').toLowerCase();
+    return h.includes(q);
+  });
+
+  // Sort worst GM% first
+  flagged.sort((a,b) => (a['GM %']||0) - (b['GM %']||0));
+  const el = document.getElementById('ff-results');
+  if(el) el.textContent = flagged.length.toLocaleString()+' projects';
+
+  const frag = document.createDocumentFragment();
+  for(const row of flagged){
+    const tr = document.createElement('tr');
+    for(const col of FLAG_COLS){
+      const td = document.createElement('td');
+      const raw = row[col];
+      const v = (raw == null ? '' : String(raw)).trim();
+      if(col === 'SSE ID'){
+        td.className = 'c-sse'; td.textContent = v;
+      } else if(col === 'Final Output'){
+        const n = parseFloat(v)||0;
+        td.className = 'c-rev';
+        td.textContent = n ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
+      } else if(col === 'Installed COGS'){
+        const n = Number(v)||0;
+        td.className = 'c-rev';
+        td.textContent = n ? '₹'+n.toLocaleString('en-IN') : '—';
+      } else if(col === 'GM %'){
+        const n = parseFloat(v);
+        if(isNaN(n)||v===''){td.textContent='—';}
+        else {
+          const pct = (n*100).toFixed(1)+'%';
+          td.className = n < 0.20 ? 'gm-bad' : 'gm-warn';
+          td.textContent = pct;
+        }
+      } else if(col === 'Project Size (kW)'){
+        const n = parseFloat(v)||0;
+        td.textContent = n ? n.toFixed(2)+' kW' : v;
+      } else {
+        td.textContent = v; td.title = v;
+      }
+      tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  }
+
+  const tb = document.getElementById('flag-body');
+  tb.innerHTML = '';
+  if(flagged.length === 0){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = FLAG_COLS.length;
+    td.style.cssText = 'text-align:center;padding:48px;color:#94a3b8;font-size:13px';
+    td.textContent = '🎉 No projects below 37% GM — looking good!';
+    tr.appendChild(td); tb.appendChild(tr);
+  } else {
+    tb.appendChild(frag);
+  }
+}
+
+function updateFlagBadge(){
+  const count = allRows.filter(r => r['GM %'] !== null && r['GM %'] < 0.37).length;
+  document.getElementById('flag-badge').textContent = count;
+  document.getElementById('flag-count-num').textContent = count;
+  buildFlagHeader();
+  buildFlagFilters();
+  buildAnalysisFilters();
+}
+
+// ── Analysis Tab ──
+const ANALYSIS_COLS = [
+  'SSE ID',
+  'Installation Completion Date',
+  'Customer Name',
+  'City',
+  'Project Size (kW)',
+  'Offer Type',
+  'Installed Kitts',
+  'Kitts',
+  'BOM Details Type 1',
+  'BOM Details Type 2',
+  'BOM Details Type 3',
+  'BOM Details Type 4',
+  'Final Output',
+  'Installed COGS',
+  'GM %'
+];
+
+function buildAnalysisHeader(){
+  const tr = document.createElement('tr');
+  ANALYSIS_COLS.forEach(col => {
+    const th = document.createElement('th');
+    th.textContent = col === 'Final Output' ? 'Installed Revenue' : col;
+    if(col === 'Kitts')          th.style.cssText = 'background:#fff7ed;color:#c2410c;border-left:2px solid #fed7aa';
+    if(col === 'Installed Kitts') th.style.cssText = 'background:#f5f3ff;color:#7c3aed;border-left:2px solid #ddd6fe';
+    tr.appendChild(th);
+  });
+  document.getElementById('analysis-head').innerHTML = '';
+  document.getElementById('analysis-head').appendChild(tr);
+}
+
+function buildAnalysisFilters(){
+  const cities = [...new Set(allRows.map(r=>(r['City']||'').trim()).filter(Boolean))].sort();
+  const months = [...new Set(allRows.map(r=>(r['Month']||'').trim()).filter(Boolean))].sort();
+  const offers = [...new Set(allRows.map(r=>(r['Offer Type']||'').trim()).filter(Boolean))].sort();
+  const popSel = (id, vals) => {
+    const sel = document.getElementById(id); if(!sel) return;
+    const ph = sel.options[0].text;
+    sel.innerHTML = '<option value="">'+ph+'</option>';
+    vals.forEach(v => { const o=document.createElement('option'); o.value=o.textContent=v; sel.appendChild(o); });
+  };
+  popSel('af-city', cities);
+  popSel('af-month', months);
+  popSel('af-offertype', offers);
+  buildAnalysisHeader();
+}
+
+function clearAnalysisFilters(){
+  document.getElementById('af-search').value = '';
+  ['af-city','af-month','af-offertype'].forEach(id => document.getElementById(id).value = '');
+  renderAnalysis();
+}
+
+function renderAnalysis(){
+  const q  = (document.getElementById('af-search')?.value||'').toLowerCase();
+  const cy = document.getElementById('af-city')?.value||'';
+  const mo = document.getElementById('af-month')?.value||'';
+  const ot = document.getElementById('af-offertype')?.value||'';
+
+  let rows = allRows.slice();
+  if(cy) rows = rows.filter(r => r['City']===cy);
+  if(mo) rows = rows.filter(r => r['Month']===mo);
+  if(ot) rows = rows.filter(r => r['Offer Type']===ot);
+  if(q)  rows = rows.filter(r => [r['SSE ID'],r['Customer Name'],r['City'],r['State']].join(' ').toLowerCase().includes(q));
+
+  const el = document.getElementById('af-results');
+  if(el) el.textContent = rows.length.toLocaleString()+' projects';
+
+  const frag = document.createDocumentFragment();
+  for(const row of rows){
+    const tr = document.createElement('tr');
+    for(const col of ANALYSIS_COLS){
+      const td = document.createElement('td');
+      const raw = row[col];
+      const v = (raw == null ? '' : String(raw)).trim();
+
+      if(col === 'SSE ID'){
+        td.className = 'c-sse'; td.textContent = v;
+      } else if(col === 'Final Output'){
+        const n = parseFloat(v)||0;
+        td.className = 'c-cogs';
+        td.textContent = n ? '₹'+Math.round(n).toLocaleString('en-IN') : '—';
+      } else if(col === 'Installed COGS'){
+        const n = Number(v)||0;
+        td.className = 'c-cogs';
+        td.textContent = n ? '₹'+n.toLocaleString('en-IN') : '—';
+      } else if(col === 'GM %'){
+        const n = parseFloat(v);
+        if(isNaN(n)||v===''){td.textContent='—';td.style.color='#94a3b8';}
+        else{
+          const pct=(n*100).toFixed(1)+'%';
+          const color=n>=0.37?'#15803d':n>=0.20?'#d97706':'#dc2626';
+          td.innerHTML='<span style="font-weight:700;color:'+color+'">'+pct+'</span>';
+        }
+      } else if(col === 'Installed Kitts'){
+        const n = Number(v)||0;
+        td.style.cssText = 'font-weight:700;font-variant-numeric:tabular-nums;color:#7c3aed;background:#f5f3ff;border-left:2px solid #ddd6fe;border-right:2px solid #ddd6fe';
+        td.textContent = n || '—';
+        td.title = 'Installed Kitts (KITS-0071 qty) = '+n;
+      } else if(col === 'Kitts'){
+        const n = Number(v)||0;
+        td.className = 'c-kitts';
+        td.textContent = n || '—';
+        td.title = 'Kitts = round(module qty × 4 × 1.05) = '+n;
+      } else if(col === 'Project Size (kW)'){
+        const n = parseFloat(v)||0;
+        td.textContent = n ? n.toFixed(2)+' kW' : v;
+      } else {
+        td.textContent = v; td.title = v;
+      }
+      tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  }
+
+  const tb = document.getElementById('analysis-body');
+  tb.innerHTML = '';
+  if(rows.length === 0){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = ANALYSIS_COLS.length;
+    td.style.cssText = 'text-align:center;padding:48px;color:#94a3b8;font-size:13px';
+    td.textContent = 'No records match the current filters.';
+    tr.appendChild(td); tb.appendChild(tr);
+  } else {
+    tb.appendChild(frag);
+  }
 }
 
 // ── Download CSV ──
