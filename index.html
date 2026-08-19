@@ -897,7 +897,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
        PROJECT DETAIL MODAL
        ═══════════════════════════════════════ -->
   <div id="proj-modal" style="display:none;position:fixed;inset:0;z-index:9100;background:rgba(15,23,42,.6);backdrop-filter:blur(4px)" onclick="if(event.target===this)closeProjModal()">
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;box-shadow:0 32px 80px rgba(15,23,42,.3);width:min(94vw,860px);max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:16px;box-shadow:0 32px 80px rgba(15,23,42,.3);width:min(96vw,960px);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
       <!-- Modal header -->
       <div id="proj-modal-hdr" style="background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);padding:18px 22px;border-radius:16px 16px 0 0;display:flex;align-items:flex-start;justify-content:space-between">
         <div>
@@ -1647,30 +1647,123 @@ function openProjectModal(sseId){
       </div>`).join('')}
     </div>`:'';
 
+  // ── Raw Line Items grouped by WP Category ──
+  const fldR=(r,...keys)=>{for(const k of keys){const v=r[k];if(v!=null&&v!=='')return v;}return '';};
+  const rawCat  =r=>(fldR(r,'custom_item_category','Custom Item Category','item_category','Item Category')||'').trim();
+  const rawSub  =r=>(fldR(r,'item_subcategory','Item Subcategory','Item Sub Category')||'').trim();
+  const rawCode =r=>(fldR(r,'item_code','Item Code')||'').trim();
+  const rawName =r=>(fldR(r,'item_name','Item Name')||'').trim();
+  const rawQty  =r=>parseFloat(fldR(r,'qty','Qty','quantity','Quantity')||0)||0;
+  const rawUom  =r=>(fldR(r,'uom','UOM','unit_of_measure','Unit')||'').trim();
+  const rawRate =r=>parseFloat(fldR(r,'rate','Rate')||0)||0;
+  const rawAmt  =r=>parseFloat(fldR(r,'amount','Amount')||0)||0;
+
+  function rawCatToWpGroup(c){
+    if(c==='Module') return 'Module';
+    if(['Inverter','Hybrid Inverter','Inverter Cluster'].includes(c)) return 'Inverter';
+    if(['Prefab MMS','Tin Shed MMS','Welded MMS','MMS'].includes(c)) return 'MMS';
+    if(['AC Cable','DC Cable','Cables','2C Cu Arm AC Cable'].includes(c)) return 'Cable';
+    return 'Others';
+  }
+
+  const groupColors={
+    Module:   {hdr:'#1e40af',bg:'#dbeafe',text:'#1e3a8a'},
+    Inverter: {hdr:'#7c3aed',bg:'#ede9fe',text:'#4c1d95'},
+    MMS:      {hdr:'#0891b2',bg:'#cffafe',text:'#164e63'},
+    Cable:    {hdr:'#d97706',bg:'#fef3c7',text:'#78350f'},
+    Others:   {hdr:'#475569',bg:'#f1f5f9',text:'#1e293b'},
+  };
+
+  const rawItems=rawItemsMap.get(sseId)||[];
+  // Group by WP category
+  const byGroup={Module:[],Inverter:[],MMS:[],Cable:[],Others:[]};
+  rawItems.forEach(r=>{ const g=rawCatToWpGroup(rawCat(r)); if(byGroup[g]) byGroup[g].push(r); });
+
+  const TH='padding:7px 11px;font-size:10.5px;font-weight:700;color:#fff;background:#1e293b;white-space:nowrap;letter-spacing:.03em;border-bottom:2px solid #334155';
+  const lineItemHdr=`<tr>
+    <th style="${TH};text-align:left">Subcategory</th>
+    <th style="${TH};text-align:left">Item Code</th>
+    <th style="${TH};text-align:left;min-width:160px">Item Name</th>
+    <th style="${TH};text-align:right">Qty</th>
+    <th style="${TH};text-align:left">UOM</th>
+    <th style="${TH};text-align:right">Rate (₹)</th>
+    <th style="${TH};text-align:right">Amount (₹)</th>
+    <th style="${TH};text-align:right">₹/Wp</th>
+  </tr>`;
+
+  let lineItemRows='';
+  WP_GROUP_NAMES.forEach(grp=>{
+    const items=byGroup[grp]||[];
+    if(!items.length) return;
+    const gc=groupColors[grp]||groupColors.Others;
+    const grpAmt=items.reduce((s,r)=>s+rawAmt(r),0);
+    const grpWp=wp>0&&grpAmt>0?(grpAmt/wp).toFixed(2):'—';
+    // Group header row (spans all 8 cols — cat removed, 6 info + amount + wp)
+    lineItemRows+=`<tr style="background:${gc.bg}">
+      <td colspan="5" style="padding:7px 11px;font-weight:800;font-size:12px;color:${gc.text};border-top:2px solid ${gc.hdr}">${grp} <span style="font-weight:500;font-size:10px;opacity:.7">${items.length} line item${items.length!==1?'s':''}</span></td>
+      <td style="padding:7px 11px;text-align:right;font-size:11px;color:${gc.text};border-top:2px solid ${gc.hdr}"></td>
+      <td style="padding:7px 11px;text-align:right;font-weight:800;color:${gc.text};border-top:2px solid ${gc.hdr};font-variant-numeric:tabular-nums">₹${Math.round(grpAmt).toLocaleString('en-IN')}</td>
+      <td style="padding:7px 11px;text-align:right;font-weight:800;color:${gc.text};border-top:2px solid ${gc.hdr}">₹${grpWp}/Wp</td>
+    </tr>`;
+    // Line item rows
+    items.forEach((r,i)=>{
+      const a=rawAmt(r);
+      const q=rawQty(r);
+      const rt=rawRate(r);
+      const itemWp=wp>0&&a>0?(a/wp).toFixed(2):null;
+      const nm=rawName(r)||'—';
+      lineItemRows+=`<tr style="background:${i%2===0?'#fff':'#f8faff'}">
+        <td style="padding:5px 11px;font-size:11px;color:#6366f1;font-weight:600;white-space:nowrap">${rawSub(r)||'—'}</td>
+        <td style="padding:5px 11px;font-size:10.5px;font-family:monospace;color:#0891b2;white-space:nowrap">${rawCode(r)||'—'}</td>
+        <td style="padding:5px 11px;font-size:11px;color:#0f172a;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nm}">${nm}</td>
+        <td style="padding:5px 11px;text-align:right;font-weight:600;color:#334155;font-variant-numeric:tabular-nums">${q?q.toLocaleString('en-IN'):'—'}</td>
+        <td style="padding:5px 11px;font-size:10.5px;color:#94a3b8">${rawUom(r)||'—'}</td>
+        <td style="padding:5px 11px;text-align:right;color:#475569;font-variant-numeric:tabular-nums;white-space:nowrap">${rt?'₹'+rt.toLocaleString('en-IN',{maximumFractionDigits:2}):'—'}</td>
+        <td style="padding:5px 11px;text-align:right;font-weight:700;color:#0f172a;font-variant-numeric:tabular-nums;white-space:nowrap">${a?'₹'+Math.round(a).toLocaleString('en-IN'):'—'}</td>
+        <td style="padding:5px 11px;text-align:right;font-weight:700;color:${itemWp?'#3730a3':'#94a3b8'};white-space:nowrap">${itemWp?'₹'+itemWp+'/Wp':'—'}</td>
+      </tr>`;
+    });
+  });
+
+  const lineItemsSection=rawItems.length?`
+    <div style="margin-top:20px">
+      <div style="font-weight:700;font-size:12px;color:#334155;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+        📋 Raw Line Items — All COGS Detail <span style="font-weight:500;font-size:11px;color:#94a3b8;text-transform:none;letter-spacing:0">${rawItems.length} items</span>
+      </div>
+      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:380px;overflow-y:auto;overflow-x:auto">
+        <table style="border-collapse:collapse;font-size:11.5px;min-width:700px;width:100%">
+          <thead>${lineItemHdr}</thead>
+          <tbody>${lineItemRows}</tbody>
+        </table>
+      </div>
+    </div>`
+    :'<div style="margin-top:12px;font-size:11px;color:#94a3b8">No raw line items found for this project.</div>';
+
   document.getElementById('proj-modal-body').innerHTML=`
     <div style="padding:18px 22px">
       ${diagnosis}
       <div style="display:flex;gap:10px;margin-bottom:16px">${kpiHtml}</div>
       ${gmBarHtml}
-      <!-- COGS Breakdown -->
+      <!-- COGS Summary vs Benchmark -->
       <div style="font-weight:700;font-size:12px;color:#334155;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">COGS Cost Breakdown vs Benchmark</div>
       <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead>
-            <tr style="background:linear-gradient(135deg,#312e81,#4338ca)">
-              <th style="padding:8px 12px;text-align:left;color:#e0e7ff;font-size:10.5px;font-weight:700;letter-spacing:.05em">Category</th>
-              <th style="padding:8px 12px;text-align:right;color:#e0e7ff;font-size:10.5px;font-weight:700">Amount (₹)</th>
-              <th style="padding:8px 12px;text-align:right;color:#e0e7ff;font-size:10.5px;font-weight:700">Share</th>
-              <th style="padding:8px 12px;text-align:right;color:#e0e7ff;font-size:10.5px;font-weight:700">₹/Wp Actual</th>
-              <th style="padding:8px 12px;text-align:right;color:#e0e7ff;font-size:10.5px;font-weight:700">₹/Wp Prev Mo.</th>
-              <th style="padding:8px 12px;text-align:right;color:#e0e7ff;font-size:10.5px;font-weight:700">Δ%</th>
-              <th style="padding:8px 12px;text-align:center;color:#e0e7ff;font-size:10.5px;font-weight:700">Status</th>
+            <tr>
+              <th style="padding:9px 12px;text-align:left;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.05em">Category</th>
+              <th style="padding:9px 12px;text-align:right;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">Amount (₹)</th>
+              <th style="padding:9px 12px;text-align:right;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">Share</th>
+              <th style="padding:9px 12px;text-align:right;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">₹/Wp Actual</th>
+              <th style="padding:9px 12px;text-align:right;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">₹/Wp Prev Mo.</th>
+              <th style="padding:9px 12px;text-align:right;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">Δ%</th>
+              <th style="padding:9px 12px;text-align:center;background:#1e1b4b;color:#fff;font-size:10.5px;font-weight:700">Status</th>
             </tr>
           </thead>
           <tbody>${cogsRows}${totRow}</tbody>
         </table>
       </div>
       ${benchNote}
+      ${lineItemsSection}
       ${extraHtml}
     </div>`;
 
