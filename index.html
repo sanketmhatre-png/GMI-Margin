@@ -814,11 +814,11 @@ td:has(+ td.c-cogs):not(.c-cogs){}
   <div class="flag-page" id="analysis-page">
     <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
       <span class="fbar-label">Filters</span>
-      <input type="text" class="fi" id="af-search" placeholder="Search SSE ID, customer, city…" style="min-width:200px" oninput="renderAnalysis()"/>
+      <input type="text" class="fi" id="af-search" placeholder="Search SSE ID, customer, city…" style="min-width:200px" oninput="_debouncedAna()"/>
       <div class="fsep"></div>
-      <select class="fs" id="af-city"      onchange="renderAnalysis()"><option value="">All Cities</option></select>
-      <select class="fs" id="af-month"     onchange="renderAnalysis()"><option value="">All Months</option></select>
-      <select class="fs" id="af-offertype" onchange="renderAnalysis()"><option value="">All Offer Types</option></select>
+      <select class="fs" id="af-city"      onchange="_debouncedAna()"><option value="">All Cities</option></select>
+      <select class="fs" id="af-month"     onchange="_debouncedAna()"><option value="">All Months</option></select>
+      <select class="fs" id="af-offertype" onchange="_debouncedAna()"><option value="">All Offer Types</option></select>
       <span class="fclr" onclick="clearAnalysisFilters()">✕ Clear</span>
       <span class="fresults" id="af-results"></span>
     </div>
@@ -836,10 +836,10 @@ td:has(+ td.c-cogs):not(.c-cogs){}
   <div class="flag-page" id="wp-page">
     <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
       <span class="fbar-label">Filters</span>
-      <input type="text" class="fi" id="wf-search" placeholder="Search SSE ID, customer, city…" style="min-width:180px" oninput="renderWpBenchmark()"/>
+      <input type="text" class="fi" id="wf-search" placeholder="Search SSE ID, customer, city…" style="min-width:180px" oninput="_debouncedWp()"/>
       <div class="fsep"></div>
-      <select class="fs" id="wf-month" onchange="renderWpBenchmark()"><option value="">All Months</option></select>
-      <select class="fs" id="wf-city"  onchange="renderWpBenchmark()"><option value="">All Cities</option></select>
+      <select class="fs" id="wf-month" onchange="_debouncedWp()"><option value="">All Months</option></select>
+      <select class="fs" id="wf-city"  onchange="_debouncedWp()"><option value="">All Cities</option></select>
       <span class="fclr" onclick="clearWpFilters()">✕ Clear</span>
       <span class="fresults" id="wf-results"></span>
       <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
@@ -884,7 +884,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
     </div>
 
     <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:12px">
-      <div class="flag-scroll">
+      <div class="flag-scroll" id="wp-scroll">
         <table id="wp-table">
           <thead id="wp-head"></thead>
           <tbody id="wp-body"></tbody>
@@ -942,9 +942,9 @@ td:has(+ td.c-cogs):not(.c-cogs){}
     <!-- Filter bar -->
     <div class="fbar" style="border-bottom:1px solid var(--border);margin:12px 24px 0;border-radius:10px 10px 0 0">
       <span class="fbar-label">Filters</span>
-      <select class="fs" id="gma-month" onchange="renderGMAnalysis()"><option value="">All Months</option></select>
-      <select class="fs" id="gma-city"  onchange="renderGMAnalysis()"><option value="">All Cities</option></select>
-      <select class="fs" id="gma-offer" onchange="renderGMAnalysis()"><option value="">All Offers</option></select>
+      <select class="fs" id="gma-month" onchange="_debouncedGMA()"><option value="">All Months</option></select>
+      <select class="fs" id="gma-city"  onchange="_debouncedGMA()"><option value="">All Cities</option></select>
+      <select class="fs" id="gma-offer" onchange="_debouncedGMA()"><option value="">All Offers</option></select>
       <span class="fclr" onclick="clearGMAFilters()">✕ Clear</span>
       <span class="fresults" id="gma-results"></span>
     </div>
@@ -984,6 +984,8 @@ td:has(+ td.c-cogs):not(.c-cogs){}
 
 <script>
 const GITHUB = 'https://raw.githubusercontent.com/sanketmhatre-png/GMI-Margin/main/data.csv.gz';
+const CACHE_VER = 'sse_v3';
+const CACHE_KEY = CACHE_VER + '_' + new Date().toISOString().slice(0,10); // daily key
 const COLS = [
   'SSE ID','Booking Type','Tagg 2','Booking Date','Booking Month','Booking Year',
   'Installation Completion Date','Month','Installation Month No','Year of',
@@ -1013,9 +1015,18 @@ const PAGE_SIZE = 300;    // rows rendered initially
 const PAGE_MORE = 200;    // rows appended per scroll trigger
 let _visibleRows = [];    // current sorted rows for main table
 let _renderedCount = 0;   // how many rows currently in DOM
+let _wpVisibleRows = [];  // current rows for ₹/Wp detail table
+let _wpRenderedCount = 0;
+
+// Debounced filter handlers for tab pages (initialized after debounce() is defined)
+let _debouncedWp, _debouncedGMA, _debouncedAna;
 
 // ── Debounce helper ──
 function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+// Init debounced handlers for tab filter inputs (defined here after debounce is available)
+_debouncedWp  = debounce(()=>renderWpBenchmark(), 300);
+_debouncedGMA = debounce(()=>renderGMAnalysis(),  300);
+_debouncedAna = debounce(()=>renderAnalysis(),    300);
 
 // ── yield to browser between heavy batches ──
 const yieldToBrowser = () => new Promise(r => setTimeout(r, 0));
@@ -1801,11 +1812,80 @@ addEventListener('load', () => {
       _appendRows(PAGE_MORE);
     }
   });
+  // Wire up scroll-to-load-more on the ₹/Wp table
+  document.getElementById('wp-scroll').addEventListener('scroll', function(){
+    if(_wpRenderedCount >= _wpVisibleRows.length) return;
+    if(this.scrollTop + this.clientHeight >= this.scrollHeight - 400){
+      _appendWpRows(PAGE_MORE);
+    }
+  });
   loadGH();
 });
 
 // ── Load GitHub ──
+// ── Cache helpers ──
+function _b64ToBytes(b64){ const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+function _bytesToB64(u8){ let s=''; for(let i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
+
+function _purgeOldCache(){
+  try{
+    const today=CACHE_KEY;
+    for(let i=localStorage.length-1;i>=0;i--){
+      const k=localStorage.key(i);
+      if(k&&k.startsWith(CACHE_VER+'_')&&k!==today) localStorage.removeItem(k);
+    }
+  }catch(e){}
+}
+
+function _saveCache(){
+  try{
+    _purgeOldCache();
+    const rawMap={};
+    for(const [k,v] of rawItemsMap) rawMap[k]=v;
+    const payload=JSON.stringify({allRowsData:allRows,rawMapData:rawMap});
+    const compressed=pako.gzip(payload);
+    const b64=_bytesToB64(compressed);
+    localStorage.setItem(CACHE_KEY,b64);
+    console.log('[Cache] saved',allRows.length,'projects,',Math.round(b64.length/1024),'KB');
+  }catch(e){
+    console.warn('[Cache] save failed (quota?):',e.message);
+  }
+}
+
+async function _loadFromCache(){
+  try{
+    const b64=localStorage.getItem(CACHE_KEY);
+    if(!b64) return false;
+    showOv('Loading from cache…');
+    await yieldToBrowser();
+    const decompressed=pako.inflate(_b64ToBytes(b64));
+    const {allRowsData,rawMapData}=JSON.parse(new TextDecoder().decode(decompressed));
+    allRows=allRowsData;
+    rawItemsMap.clear();
+    for(const [k,v] of Object.entries(rawMapData)) rawItemsMap.set(k,v);
+    showOv('Building table…');
+    await yieldToBrowser();
+    buildFilters();
+    buildGMAFilters();
+    buildHeader();
+    applyFilters(true);
+    updateFlagBadge();
+    hideOv();
+    setDot('ok','Cached · '+allRows.length.toLocaleString()+' records (today)');
+    document.getElementById('btn-dl').disabled = false;
+    return true;
+  }catch(e){
+    console.warn('[Cache] load failed:',e.message);
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e2){}
+    return false;
+  }
+}
+
 async function loadGH(){
+  setDot('loading','Checking cache…');
+  const hit = await _loadFromCache();
+  if(hit) return;
+
   setDot('loading','Fetching data…');
   showOv('Fetching data.csv.gz from GitHub…');
   try{
@@ -1821,8 +1901,9 @@ async function loadGH(){
   }
 }
 
-// Refresh
+// Refresh — clears cache so fresh data is fetched from GitHub
 function refreshData(){
+  try{ localStorage.removeItem(CACHE_KEY); }catch(e){}
   const btn=document.getElementById('btn-refresh');
   btn.disabled=true; btn.textContent='🔄 Refreshing…';
   loadGH().finally(()=>{ btn.disabled=false; btn.textContent='🔄 Refresh'; });
@@ -1903,6 +1984,10 @@ async function ingest(txt,src){
   buildHeader();
   applyFilters(true);
   updateFlagBadge();
+
+  // Save to cache for fast reload (skip if data came from file upload — only cache GitHub)
+  if(src==='GitHub'){ showOv('Saving to cache…'); await yieldToBrowser(); _saveCache(); }
+
   hideOv();
   setDot('ok','Live · '+allRows.length.toLocaleString()+' records from '+src);
   document.getElementById('btn-dl').disabled = false;
@@ -2801,133 +2886,9 @@ function renderWpBenchmark(){
   const detailRows = wpCategoryFilter ? rows.filter(r=>_classifyRow(r)===wpCategoryFilter) : rows;
   if(el) el.textContent=detailRows.length.toLocaleString()+' projects'+(wpCategoryFilter?' ('+wpCategoryFilter+')':'');
 
-  const frag=document.createDocumentFragment();
-
-  for(const row of detailRows){
-    const key=buildMonthKey(row);
-    const prev=prevMonthKey(key);
-    const bench=monthBenchmarks.get(prev);
-    const kw=parseFloat(row['Project Size (kW)'])||0;
-    const wp=kw*1000;
-    const gm=row['GM %'];
-    const cat=_classifyRow(row);
-    const gmLow=(cat==='Flash IDS');
-    const isBlankRow=(cat==='Blank IDS');
-    const tr=document.createElement('tr');
-    if(gmLow) tr.style.cssText='background:#fff0f0';
-    else if(isBlankRow) tr.style.cssText='background:#fafaf9';
-    let issueCount=0;
-
-    const addTd=(text,style='',cls='')=>{
-      const td=document.createElement('td');
-      td.textContent=text;
-      if(style) td.style.cssText=style;
-      if(cls) td.className=cls;
-      tr.appendChild(td); return td;
-    };
-
-    // SSE ID
-    const sseTd=document.createElement('td');
-    sseTd.className='c-sse';
-    const sseBg=gmLow?'#fff5f5':isBlankRow?'#fafaf9':'#fff';
-    sseTd.style.cssText='background:'+sseBg+';border:1px solid #e2e8f0';
-    sseTd.textContent=row['SSE ID']||'—';
-    tr.appendChild(sseTd);
-
-    // Project Info (4 cells) — light gray section
-    const piBase='background:#fafbfc;border:1px solid #e2e8f0;';
-    addTd((row['Customer Name']||'—').slice(0,20), piBase+'font-size:11px;border-left:2px solid #cbd5e1');
-    addTd(row['City']||'—',                        piBase+'font-size:11px;color:#475569');
-    addTd(kw?kw.toFixed(1):'—',                    piBase+'text-align:right;font-variant-numeric:tabular-nums;color:#334155');
-
-    // Offer badge
-    const offerTd=document.createElement('td');
-    const ot=row['Offer Type']||'—';
-    const obg=ot==='GoodZero'?'#dbeafe':ot==='PreGoodZero'?'#ede9fe':ot==='Cash'?'#d1fae5':ot==='EMI'?'#fef3c7':'#f1f5f9';
-    const ocl=ot==='GoodZero'?'#1e40af':ot==='PreGoodZero'?'#5b21b6':ot==='Cash'?'#065f46':ot==='EMI'?'#92400e':'#475569';
-    offerTd.innerHTML='<span style="font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:99px;background:'+obg+';color:'+ocl+'">'+ot+'</span>';
-    offerTd.style.cssText=piBase+'padding:5px 7px';
-    tr.appendChild(offerTd);
-
-    // Period (2 cells) — same as Project Info
-    const perBase='background:#fafbfc;border:1px solid #e2e8f0;';
-    addTd(keyLabel(key),        perBase+'font-weight:600;color:#334155;font-size:11px;border-left:2px solid #94a3b8');
-    addTd('← '+keyLabel(prev), perBase+'color:#94a3b8;font-size:10px');
-
-    // Financials (2 cells) — blue-tinted
-    const rev=parseFloat(row['Final Output'])||0;
-    const revTd=document.createElement('td');
-    revTd.className='fin-cell';
-    revTd.style.borderLeft='2px solid #3b82f6';
-    revTd.textContent=rev?'₹'+Math.round(rev).toLocaleString('en-IN'):'—';
-    tr.appendChild(revTd);
-
-    const cogs=Number(row['Installed COGS'])||0;
-    const cogsTd=document.createElement('td');
-    cogsTd.className='fin-cell';
-    cogsTd.textContent=cogs?'₹'+cogs.toLocaleString('en-IN'):'—';
-    tr.appendChild(cogsTd);
-
-    // one cell per COGS group
-    let wpFirst=true;
-    for(const grp of WP_GROUP_NAMES){
-      const cols=WP_GROUPS[grp];
-      const projectTotal=cols.reduce((s,c)=>s+(Number(row[c])||0),0);
-      const actual=wp>0?projectTotal/wp:0;
-      const benchmark=bench[grp]||0;
-      const delta=actual-benchmark;
-      const tolPct=WP_TOLERANCE[grp]||0;
-      // over tolerance only if increase exceeds the allowed % above benchmark
-      const changePct=benchmark>0?(actual-benchmark)/benchmark:0;
-      const over=changePct>tolPct;
-      if(over) issueCount++;
-
-      const color=over?'#dc2626':'#16a34a';
-      const arrow=delta>0?'▲':'▼';
-      const absPct=Math.abs(changePct*100).toFixed(1)+'%';
-      const badgeBg=over?'#fee2e2':'#dcfce7';
-      const badgeColor=over?'#dc2626':'#15803d';
-
-      const td=document.createElement('td');
-      td.className='wp-cell'+(over?' wp-over':changePct>0?' wp-ok-pos':' wp-ok-neg');
-      if(wpFirst){td.style.borderLeft='2px solid #6366f1';wpFirst=false;}
-      // Main value row: big ₹ value + % badge side by side
-      td.innerHTML=
-        '<div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:3px">'
-          +'<span style="font-weight:700;font-size:12.5px;color:'+color+';font-variant-numeric:tabular-nums;letter-spacing:-.01em">₹'+actual.toFixed(2)+'</span>'
-          +'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:'+badgeBg+';color:'+badgeColor+'">'+arrow+absPct+'</span>'
-        +'</div>'
-        +'<div style="font-size:9px;color:#94a3b8;font-variant-numeric:tabular-nums">prev ₹'+benchmark.toFixed(2)+'</div>';
-      tr.appendChild(td);
-    }
-
-    // GM% — result section
-    const gmTd=document.createElement('td');
-    gmTd.className='res-cell';
-    gmTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4;border-left:2px solid #10b981';
-    if(gm===null||gm===undefined){
-      gmTd.innerHTML='<span style="color:#94a3b8;font-size:11px">—</span>';
-    } else {
-      const pct=(gm*100).toFixed(1)+'%';
-      const [bg,cl,brd]=gm>=0.38?['#dcfce7','#15803d','#86efac']:gm>=0.20?['#fef3c7','#92400e','#fde68a']:['#fee2e2','#dc2626','#fca5a5'];
-      gmTd.innerHTML='<span style="font-weight:800;font-size:12px;color:'+cl+';background:'+bg+';padding:3px 10px;border-radius:99px;display:inline-block;border:1px solid '+brd+'">'+pct+'</span>';
-    }
-    tr.appendChild(gmTd);
-
-    // Issues badge
-    const statusTd=document.createElement('td');
-    statusTd.className='res-cell';
-    statusTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4';
-    if(issueCount===0){
-      statusTd.innerHTML='<span style="color:#065f46;font-weight:700;font-size:10.5px;background:#d1fae5;padding:3px 11px;border-radius:99px;border:1px solid #6ee7b7;display:inline-block">OK</span>';
-    } else {
-      const [cl,bg,brd]=issueCount>=4?['#7f1d1d','#fee2e2','#fca5a5']:['#991b1b','#fef2f2','#fecaca'];
-      statusTd.innerHTML='<span style="background:'+bg+';color:'+cl+';font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid '+brd+';display:inline-block">'+issueCount+'/'+WP_GROUP_NAMES.length+'</span>';
-    }
-    tr.appendChild(statusTd);
-    frag.appendChild(tr);
-  }
-
+  // Store for paginated scroll rendering
+  _wpVisibleRows = detailRows;
+  _wpRenderedCount = 0;
   const tb=document.getElementById('wp-body');
   tb.innerHTML='';
   if(detailRows.length===0){
@@ -2940,8 +2901,155 @@ function renderWpBenchmark(){
       :'No projects found — only months with prior month data are shown.';
     tr.appendChild(td); tb.appendChild(tr);
   } else {
-    tb.appendChild(frag);
+    // Fit exactly as many rows as the visible container can hold
+    const wpScroll=document.getElementById('wp-scroll');
+    const rowH=54; // estimated px height per ₹/Wp row
+    const fitCount=wpScroll ? Math.max(10, Math.ceil(wpScroll.clientHeight/rowH)) : 20;
+    _appendWpRows(fitCount);
   }
+  // scroll container back to top
+  const wpScroll=document.getElementById('wp-scroll');
+  if(wpScroll) wpScroll.scrollTop=0;
+  return;
+}
+
+// ── Build one ₹/Wp table row ──
+function _buildWpRow(row){
+  const key=buildMonthKey(row);
+  const prev=prevMonthKey(key);
+  const bench=monthBenchmarks.get(prev)||{};
+  const kw=parseFloat(row['Project Size (kW)'])||0;
+  const wp=kw*1000;
+  const gm=row['GM %'];
+  const cat=_classifyRow(row);
+  const gmLow=(cat==='Flash IDS');
+  const isBlankRow=(cat==='Blank IDS');
+  const tr=document.createElement('tr');
+  if(gmLow) tr.style.cssText='background:#fff0f0';
+  else if(isBlankRow) tr.style.cssText='background:#fafaf9';
+  let issueCount=0;
+
+  const addTd=(text,style='',cls='')=>{
+    const td=document.createElement('td');
+    td.textContent=text;
+    if(style) td.style.cssText=style;
+    if(cls) td.className=cls;
+    tr.appendChild(td); return td;
+  };
+
+  // SSE ID
+  const sseTd=document.createElement('td');
+  sseTd.className='c-sse';
+  const sseBg=gmLow?'#fff5f5':isBlankRow?'#fafaf9':'#fff';
+  sseTd.style.cssText='background:'+sseBg+';border:1px solid #e2e8f0';
+  sseTd.textContent=row['SSE ID']||'—';
+  tr.appendChild(sseTd);
+
+  // Project Info
+  const piBase='background:#fafbfc;border:1px solid #e2e8f0;';
+  addTd((row['Customer Name']||'—').slice(0,20), piBase+'font-size:11px;border-left:2px solid #cbd5e1');
+  addTd(row['City']||'—',                        piBase+'font-size:11px;color:#475569');
+  addTd(kw?kw.toFixed(1):'—',                    piBase+'text-align:right;font-variant-numeric:tabular-nums;color:#334155');
+
+  // Offer badge
+  const offerTd=document.createElement('td');
+  const ot=row['Offer Type']||'—';
+  const obg=ot==='GoodZero'?'#dbeafe':ot==='PreGoodZero'?'#ede9fe':ot==='Cash'?'#d1fae5':ot==='EMI'?'#fef3c7':'#f1f5f9';
+  const ocl=ot==='GoodZero'?'#1e40af':ot==='PreGoodZero'?'#5b21b6':ot==='Cash'?'#065f46':ot==='EMI'?'#92400e':'#475569';
+  offerTd.innerHTML='<span style="font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:99px;background:'+obg+';color:'+ocl+'">'+ot+'</span>';
+  offerTd.style.cssText=piBase+'padding:5px 7px';
+  tr.appendChild(offerTd);
+
+  // Period
+  const perBase='background:#fafbfc;border:1px solid #e2e8f0;';
+  addTd(keyLabel(key),        perBase+'font-weight:600;color:#334155;font-size:11px;border-left:2px solid #94a3b8');
+  addTd('← '+keyLabel(prev), perBase+'color:#94a3b8;font-size:10px');
+
+  // Financials
+  const rev=parseFloat(row['Final Output'])||0;
+  const revTd=document.createElement('td');
+  revTd.className='fin-cell';
+  revTd.style.borderLeft='2px solid #3b82f6';
+  revTd.textContent=rev?'₹'+Math.round(rev).toLocaleString('en-IN'):'—';
+  tr.appendChild(revTd);
+
+  const cogs=Number(row['Installed COGS'])||0;
+  const cogsTd=document.createElement('td');
+  cogsTd.className='fin-cell';
+  cogsTd.textContent=cogs?'₹'+cogs.toLocaleString('en-IN'):'—';
+  tr.appendChild(cogsTd);
+
+  // COGS groups
+  let wpFirst=true;
+  for(const grp of WP_GROUP_NAMES){
+    const cols=WP_GROUPS[grp];
+    const projectTotal=cols.reduce((s,c)=>s+(Number(row[c])||0),0);
+    const actual=wp>0?projectTotal/wp:0;
+    const benchmark=bench[grp]||0;
+    const delta=actual-benchmark;
+    const tolPct=WP_TOLERANCE[grp]||0;
+    const changePct=benchmark>0?(actual-benchmark)/benchmark:0;
+    const over=changePct>tolPct;
+    if(over) issueCount++;
+    const color=over?'#dc2626':'#16a34a';
+    const arrow=delta>0?'▲':'▼';
+    const absPct=Math.abs(changePct*100).toFixed(1)+'%';
+    const badgeBg=over?'#fee2e2':'#dcfce7';
+    const badgeColor=over?'#dc2626':'#15803d';
+    const td=document.createElement('td');
+    td.className='wp-cell'+(over?' wp-over':changePct>0?' wp-ok-pos':' wp-ok-neg');
+    if(wpFirst){td.style.borderLeft='2px solid #6366f1';wpFirst=false;}
+    td.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:3px">'
+        +'<span style="font-weight:700;font-size:12.5px;color:'+color+';font-variant-numeric:tabular-nums;letter-spacing:-.01em">₹'+actual.toFixed(2)+'</span>'
+        +'<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:'+badgeBg+';color:'+badgeColor+'">'+arrow+absPct+'</span>'
+      +'</div>'
+      +'<div style="font-size:9px;color:#94a3b8;font-variant-numeric:tabular-nums">prev ₹'+benchmark.toFixed(2)+'</div>';
+    tr.appendChild(td);
+  }
+
+  // GM%
+  const gmTd=document.createElement('td');
+  gmTd.className='res-cell';
+  gmTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4;border-left:2px solid #10b981';
+  if(gm===null||gm===undefined){
+    gmTd.innerHTML='<span style="color:#94a3b8;font-size:11px">—</span>';
+  } else {
+    const pct=(gm*100).toFixed(1)+'%';
+    const [bg,cl,brd]=gm>=0.38?['#dcfce7','#15803d','#86efac']:gm>=0.20?['#fef3c7','#92400e','#fde68a']:['#fee2e2','#dc2626','#fca5a5'];
+    gmTd.innerHTML='<span style="font-weight:800;font-size:12px;color:'+cl+';background:'+bg+';padding:3px 10px;border-radius:99px;display:inline-block;border:1px solid '+brd+'">'+pct+'</span>';
+  }
+  tr.appendChild(gmTd);
+
+  // Issues badge
+  const statusTd=document.createElement('td');
+  statusTd.className='res-cell';
+  statusTd.style.cssText='text-align:center;padding:5px 8px;background:#f0fdf4';
+  if(issueCount===0){
+    statusTd.innerHTML='<span style="color:#065f46;font-weight:700;font-size:10.5px;background:#d1fae5;padding:3px 11px;border-radius:99px;border:1px solid #6ee7b7;display:inline-block">OK</span>';
+  } else {
+    const [cl,bg,brd]=issueCount>=4?['#7f1d1d','#fee2e2','#fca5a5']:['#991b1b','#fef2f2','#fecaca'];
+    statusTd.innerHTML='<span style="background:'+bg+';color:'+cl+';font-weight:700;font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid '+brd+';display:inline-block">'+issueCount+'/'+WP_GROUP_NAMES.length+'</span>';
+  }
+  tr.appendChild(statusTd);
+  return tr;
+}
+
+// ── Append next batch of ₹/Wp rows ──
+function _appendWpRows(count){
+  const end=Math.min(_wpRenderedCount+count, _wpVisibleRows.length);
+  if(_wpRenderedCount>=end) return;
+  const frag=document.createDocumentFragment();
+  for(let i=_wpRenderedCount;i<end;i++) frag.appendChild(_buildWpRow(_wpVisibleRows[i]));
+  document.getElementById('wp-body').appendChild(frag);
+  _wpRenderedCount=end;
+  // Update count label
+  const total=_wpVisibleRows.length;
+  const el=document.getElementById('wf-results');
+  const cat=typeof wpCategoryFilter==='string'?' ('+wpCategoryFilter+')':'';
+  if(el) el.textContent=(_wpRenderedCount<total
+    ?_wpRenderedCount.toLocaleString()+' of '+total.toLocaleString()+' projects (scroll for more)'+cat
+    :total.toLocaleString()+' projects'+cat);
 }
 
 // ── WP Summary Table ──
