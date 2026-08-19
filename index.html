@@ -1859,7 +1859,7 @@ async function ingest(txt,src){
   for(const [id,items] of groups){
     const base={...items[0]};
     Object.assign(base,computeCOGS(items));
-    base._isHybrid = items.some(r=>(r['item_category']||'').trim()==='Hybrid Inverter');
+    base._isHybrid = items.some(r=>(r['item_subcategory']||r['Item Subcategory']||r['Item Sub Category']||'').trim()==='Hybrid Inverter');
     base._search = [base['SSE ID'],base['Customer Name'],base['City'],base['State'],base['Booking Type'],base['Tagg 2']].join(' ').toLowerCase();
     rawItemsMap.set(id, items);   // store raw DN lines for drill-down
     allRows.push(base);
