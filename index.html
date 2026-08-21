@@ -823,7 +823,7 @@ td:has(+ td.c-cogs):not(.c-cogs){}
       <span class="fresults" id="af-results"></span>
     </div>
     <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:0">
-      <div class="flag-scroll">
+      <div class="flag-scroll" id="af-scroll">
         <table>
           <thead id="analysis-head"></thead>
           <tbody id="analysis-body"></tbody>
@@ -862,11 +862,12 @@ td:has(+ td.c-cogs):not(.c-cogs){}
       </div>
     </div>
     <!-- Summary table -->
-    <div id="wp-summary-wrap" style="margin:12px 24px 0;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden">
+    <div id="wp-summary-wrap" style="margin:12px 24px 0;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden;flex-shrink:0;max-height:42vh;display:flex;flex-direction:column">
       <div style="padding:8px 14px;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 100%);display:flex;align-items:center;gap:8px">
         <span style="font-size:11px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:#e0e7ff">GMI Summary</span>
-        <span style="font-size:9.5px;color:#a5b4fc;font-weight:500">Flash IDS = GM% &lt; 38% · Blank IDS = any COGS = ₹0 · Click a row to filter ↓</span>
+        <span style="font-size:9.5px;color:#a5b4fc;font-weight:500">Flash IDS = GM% &lt; 38% · Blank IDS = any COGS = ₹0 · ▶ Click label/Sr to expand · Click numbers to filter ↓</span>
       </div>
+      <div style="overflow-y:auto;flex:1;min-height:0">
       <table id="wp-summary-table" style="width:100%;border-collapse:collapse;font-size:11.5px">
         <thead>
           <tr>
@@ -881,9 +882,10 @@ td:has(+ td.c-cogs):not(.c-cogs){}
         </thead>
         <tbody id="wp-summary-body"></tbody>
       </table>
+      </div>
     </div>
 
-    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:12px">
+    <div class="flag-wrap" style="border-radius:0 0 12px 12px;margin-top:8px">
       <div class="flag-scroll" id="wp-scroll">
         <table id="wp-table">
           <thead id="wp-head"></thead>
@@ -985,7 +987,8 @@ td:has(+ td.c-cogs):not(.c-cogs){}
 <script>
 const GITHUB = 'https://raw.githubusercontent.com/sanketmhatre-png/GMI-Margin/main/data.csv.gz';
 const CACHE_VER = 'sse_v3';
-const CACHE_KEY = CACHE_VER + '_' + new Date().toISOString().slice(0,10); // daily key
+// Cache key resets at 3:00 AM IST (= UTC+5:30, so shift back 2.5h → key flips at 21:30 UTC = 3:00 AM IST)
+const CACHE_KEY = CACHE_VER + '_' + new Date(Date.now() + 2.5 * 3600 * 1000).toISOString().slice(0,10);
 const COLS = [
   'SSE ID','Booking Type','Tagg 2','Booking Date','Booking Month','Booking Year',
   'Installation Completion Date','Month','Installation Month No','Year of',
@@ -1017,6 +1020,8 @@ let _visibleRows = [];    // current sorted rows for main table
 let _renderedCount = 0;   // how many rows currently in DOM
 let _wpVisibleRows = [];  // current rows for ₹/Wp detail table
 let _wpRenderedCount = 0;
+let _afVisibleRows = [];  // current rows for Analysis tab table
+let _afRenderedCount = 0;
 
 // Debounced filter handlers for tab pages (initialized after debounce() is defined)
 let _debouncedWp, _debouncedGMA, _debouncedAna;
@@ -1819,6 +1824,13 @@ addEventListener('load', () => {
       _appendWpRows(PAGE_MORE);
     }
   });
+  // Wire up scroll-to-load-more on the Analysis tab table
+  document.getElementById('af-scroll').addEventListener('scroll', function(){
+    if(_afRenderedCount >= _afVisibleRows.length) return;
+    if(this.scrollTop + this.clientHeight >= this.scrollHeight - 300){
+      _appendAnalysisRows(PAGE_MORE);
+    }
+  });
   loadGH();
 });
 
@@ -2546,6 +2558,81 @@ function clearAnalysisFilters(){
   renderAnalysis();
 }
 
+function _buildAnalysisRow(row){
+  const tr = document.createElement('tr');
+  for(const col of ANALYSIS_COLS){
+    const td = document.createElement('td');
+    const raw = row[col];
+    const v = (raw == null ? '' : String(raw)).trim();
+    if(col === 'SSE ID'){
+      td.className = 'c-sse'; td.textContent = v;
+    } else if(col.startsWith('MMS: ') && col.endsWith(' - Qty')){
+      const n = Number(v)||0;
+      const isFirst = col === 'MMS: Purlin J - Qty';
+      const grpKey = col.includes('Purlin J')?'purlin':col.includes('Column')?'column':col.includes('Rafter')?'rafter':'others';
+      const kw = parseFloat(row['Project Size (kW)'])||0;
+      td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#3730a3;background:#eef2ff'+(isFirst?';border-left:2px solid #6366f1':'')+(n?';cursor:pointer':'');
+      td.textContent = n ? n.toLocaleString('en-IN') : '—';
+      if(n){
+        td.title = 'Click to view line items';
+        td.onmouseenter = () => { td.style.background='#c7d2fe'; td.style.textDecoration='underline'; };
+        td.onmouseleave = () => { td.style.background='#eef2ff'; td.style.textDecoration='none'; };
+        td.onclick = () => openMmsModal(row['SSE ID'], grpKey, kw.toFixed(2));
+      }
+    } else if(col === 'MMS: Total - Qty'){
+      const n = Number(v)||0;
+      td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe;border-left:1px solid #a5b4fc';
+      td.textContent = n ? n.toLocaleString('en-IN') : '—';
+    } else if(col === 'MMS: Total - Amt'){
+      const n = Number(v)||0;
+      const kw = parseFloat(row['Project Size (kW)'])||0;
+      const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
+      td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe';
+      td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
+    } else if(col.startsWith('MMS: ') && col.endsWith(' - Amt')){
+      const n = Number(v)||0;
+      const kw = parseFloat(row['Project Size (kW)'])||0;
+      const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
+      td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#1e1b4b;background:#eef2ff';
+      td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
+    } else if(col === 'Installed Kitts'){
+      const n = Number(v)||0;
+      td.style.cssText = 'font-weight:700;font-variant-numeric:tabular-nums;color:#7c3aed;background:#f5f3ff;border-left:2px solid #ddd6fe;border-right:2px solid #ddd6fe';
+      td.textContent = n || '—';
+      td.title = 'Installed Kitts (KITS-0071 qty) = '+n;
+    } else if(col === 'Kitts'){
+      const n = Number(v)||0;
+      td.className = 'c-kitts';
+      td.textContent = n || '—';
+      td.title = 'Kitts = round(module qty × 4 × 1.05) = '+n;
+    } else if(col === 'Project Size (kW)'){
+      const n = parseFloat(v)||0;
+      td.textContent = n ? n.toFixed(2)+' kW' : v;
+    } else if(col === 'BOM Details Type 1'){
+      td.style.cssText = 'border-left:2px solid #86efac';
+      td.textContent = v; td.title = v;
+    } else {
+      td.textContent = v; td.title = v;
+    }
+    tr.appendChild(td);
+  }
+  return tr;
+}
+
+function _appendAnalysisRows(count){
+  const end = Math.min(_afRenderedCount + count, _afVisibleRows.length);
+  if(_afRenderedCount >= end) return;
+  const frag = document.createDocumentFragment();
+  for(let i = _afRenderedCount; i < end; i++) frag.appendChild(_buildAnalysisRow(_afVisibleRows[i]));
+  document.getElementById('analysis-body').appendChild(frag);
+  _afRenderedCount = end;
+  const total = _afVisibleRows.length;
+  const el = document.getElementById('af-results');
+  if(el) el.textContent = (_afRenderedCount < total
+    ? _afRenderedCount.toLocaleString()+' of '+total.toLocaleString()+' projects (scroll for more)'
+    : total.toLocaleString()+' projects');
+}
+
 function renderAnalysis(){
   const q  = (document.getElementById('af-search')?.value||'').toLowerCase();
   const cy = document.getElementById('af-city')?.value||'';
@@ -2558,74 +2645,11 @@ function renderAnalysis(){
   if(ot) rows = rows.filter(r => r['Offer Type']===ot);
   if(q)  rows = rows.filter(r => [r['SSE ID'],r['Customer Name'],r['City'],r['State']].join(' ').toLowerCase().includes(q));
 
-  const el = document.getElementById('af-results');
-  if(el) el.textContent = rows.length.toLocaleString()+' projects';
-
-  const frag = document.createDocumentFragment();
-  for(const row of rows){
-    const tr = document.createElement('tr');
-    for(const col of ANALYSIS_COLS){
-      const td = document.createElement('td');
-      const raw = row[col];
-      const v = (raw == null ? '' : String(raw)).trim();
-
-      if(col === 'SSE ID'){
-        td.className = 'c-sse'; td.textContent = v;
-      } else if(col.startsWith('MMS: ') && col.endsWith(' - Qty')){
-        const n = Number(v)||0;
-        const isFirst = col === 'MMS: Purlin J - Qty';
-        const grpKey = col.includes('Purlin J')?'purlin':col.includes('Column')?'column':col.includes('Rafter')?'rafter':'others';
-        const kw = parseFloat(row['Project Size (kW)'])||0;
-        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#3730a3;background:#eef2ff'+(isFirst?';border-left:2px solid #6366f1':'')+(n?';cursor:pointer':'');
-        td.textContent = n ? n.toLocaleString('en-IN') : '—';
-        if(n){
-          td.title = 'Click to view line items';
-          td.onmouseenter = () => { td.style.background='#c7d2fe'; td.style.textDecoration='underline'; };
-          td.onmouseleave = () => { td.style.background='#eef2ff'; td.style.textDecoration='none'; };
-          td.onclick = () => openMmsModal(row['SSE ID'], grpKey, kw.toFixed(2));
-        }
-      } else if(col === 'MMS: Total - Qty'){
-        const n = Number(v)||0;
-        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe;border-left:1px solid #a5b4fc';
-        td.textContent = n ? n.toLocaleString('en-IN') : '—';
-      } else if(col === 'MMS: Total - Amt'){
-        const n = Number(v)||0;
-        const kw = parseFloat(row['Project Size (kW)'])||0;
-        const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
-        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;font-weight:800;color:#1e1b4b;background:#c7d2fe';
-        td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
-      } else if(col.startsWith('MMS: ') && col.endsWith(' - Amt')){
-        const n = Number(v)||0;
-        const kw = parseFloat(row['Project Size (kW)'])||0;
-        const wpVal = (kw > 0 && n > 0) ? (n / (kw * 1000)).toFixed(2) : null;
-        td.style.cssText = 'text-align:center;font-variant-numeric:tabular-nums;color:#1e1b4b;background:#eef2ff';
-        td.textContent = wpVal ? '₹'+wpVal+'/Wp' : '—';
-      } else if(col === 'Installed Kitts'){
-        const n = Number(v)||0;
-        td.style.cssText = 'font-weight:700;font-variant-numeric:tabular-nums;color:#7c3aed;background:#f5f3ff;border-left:2px solid #ddd6fe;border-right:2px solid #ddd6fe';
-        td.textContent = n || '—';
-        td.title = 'Installed Kitts (KITS-0071 qty) = '+n;
-      } else if(col === 'Kitts'){
-        const n = Number(v)||0;
-        td.className = 'c-kitts';
-        td.textContent = n || '—';
-        td.title = 'Kitts = round(module qty × 4 × 1.05) = '+n;
-      } else if(col === 'Project Size (kW)'){
-        const n = parseFloat(v)||0;
-        td.textContent = n ? n.toFixed(2)+' kW' : v;
-      } else if(col === 'BOM Details Type 1'){
-        td.style.cssText = 'border-left:2px solid #86efac';
-        td.textContent = v; td.title = v;
-      } else {
-        td.textContent = v; td.title = v;
-      }
-      tr.appendChild(td);
-    }
-    frag.appendChild(tr);
-  }
-
+  _afVisibleRows = rows;
+  _afRenderedCount = 0;
   const tb = document.getElementById('analysis-body');
   tb.innerHTML = '';
+
   if(rows.length === 0){
     const tr = document.createElement('tr');
     const td = document.createElement('td');
@@ -2633,9 +2657,16 @@ function renderAnalysis(){
     td.style.cssText = 'text-align:center;padding:48px;color:#94a3b8;font-size:13px';
     td.textContent = 'No records match the current filters.';
     tr.appendChild(td); tb.appendChild(tr);
+    const el = document.getElementById('af-results');
+    if(el) el.textContent = '0 projects';
   } else {
-    tb.appendChild(frag);
+    const afScroll = document.getElementById('af-scroll');
+    const rowH = 36;
+    const fitCount = afScroll ? Math.max(10, Math.ceil(afScroll.clientHeight / rowH)) : 20;
+    _appendAnalysisRows(fitCount);
   }
+  const afScroll = document.getElementById('af-scroll');
+  if(afScroll) afScroll.scrollTop = 0;
 }
 
 // ── ₹/Wp Benchmark Tab ──
@@ -3052,89 +3083,207 @@ function _appendWpRows(count){
     :total.toLocaleString()+' projects'+cat);
 }
 
-// ── WP Summary Table ──
+// ── WP Summary Table (expandable) ──
 function renderWpSummary(rows){
   const body=document.getElementById('wp-summary-body');
   if(!body) return;
 
-  // Classify each row using the shared helper (new logic: any zero COGS → Blank)
-  const groups=[
-    {label:'NON Flash IDS', filter:r=>_classifyRow(r)==='NON Flash IDS',
-     bg:'#f0fdf4', cl:'#15803d', badge:'#d1fae5', badgeCl:'#15803d', badgeBrd:'#86efac'},
-    {label:'Flash IDS',     filter:r=>_classifyRow(r)==='Flash IDS',
-     bg:'#fff5f5', cl:'#dc2626', badge:'#fee2e2', badgeCl:'#dc2626', badgeBrd:'#fca5a5'},
-    {label:'Blank IDS',     filter:r=>_classifyRow(r)==='Blank IDS',
-     bg:'#fafaf9', cl:'#78716c', badge:'#f5f5f4', badgeCl:'#78716c', badgeBrd:'#d6d3d1'},
-  ];
-
   const fmt=n=>n?'₹'+Math.round(n).toLocaleString('en-IN'):'—';
   const fmtKw=n=>n?n.toLocaleString('en-IN',{maximumFractionDigits:1}):'—';
-
-  let totalIds=0, totalKw=0, totalRev=0, totalCogs=0;
-
-  body.innerHTML='';
-
-  groups.forEach((g,i)=>{
-    const grp=rows.filter(g.filter);
-    const ids=grp.length;
-    const kw=grp.reduce((s,r)=>s+(parseFloat(r['Project Size (kW)'])||0),0);
-    const rev=grp.reduce((s,r)=>s+(parseFloat(r['Final Output'])||0),0);
-    const cogs=grp.reduce((s,r)=>s+(parseFloat(r['Installed COGS'])||0),0);
+  const gmPillHtml=(gm,badgeCl,badge,badgeBrd)=>{
+    if(gm===null||gm===undefined) return '<span style="color:#94a3b8;font-size:11px">—</span>';
+    const cl=badgeCl||( gm>=0.38?'#15803d':'#dc2626');
+    const bg=badge||(gm>=0.38?'#d1fae5':'#fee2e2');
+    const brd=badgeBrd||(gm>=0.38?'#86efac':'#fca5a5');
+    return '<span style="font-weight:800;font-size:11px;color:'+cl+';background:'+bg+';padding:2px 9px;border-radius:99px;display:inline-block;border:1px solid '+brd+'">'+(gm*100).toFixed(1)+'%</span>';
+  };
+  const aggStats=arr=>{
+    const ids=arr.length;
+    const kw=arr.reduce((s,r)=>s+(parseFloat(r['Project Size (kW)'])||0),0);
+    const rev=arr.reduce((s,r)=>s+(parseFloat(r['Final Output'])||0),0);
+    const cogs=arr.reduce((s,r)=>s+(parseFloat(r['Installed COGS'])||0),0);
     const gm=rev>0?(rev-cogs)/rev:null;
-    totalIds+=ids; totalKw+=kw; totalRev+=rev; totalCogs+=cogs;
+    return {ids,kw,rev,cogs,gm};
+  };
 
-    const gmPill=gm===null
-      ?'<span style="color:#94a3b8;font-size:11px">—</span>'
-      :'<span style="font-weight:800;font-size:11.5px;color:'+g.badgeCl+';background:'+g.badge
-        +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+g.badgeBrd+'">'+(gm*100).toFixed(1)+'%</span>';
+  // Helper to get benchmark for a row — uses prev-month key (same logic as _buildWpRow)
+  const getBench=r=>{
+    const key=buildMonthKey(r);
+    const prev=prevMonthKey(key);
+    return monthBenchmarks.get(prev)||{};
+  };
 
-    const isActive=wpCategoryFilter===g.label;
-    const tr=document.createElement('tr');
-    tr.style.cssText='background:'+g.bg+';cursor:pointer;transition:outline .1s';
-    if(isActive) tr.style.cssText+=';outline:2px solid '+(i===0?'#16a34a':i===1?'#dc2626':'#78716c')+';outline-offset:-2px;box-shadow:inset 0 0 0 2px '+(i===0?'#16a34a':i===1?'#dc2626':'#a8a29e');
-    tr.title='Click to filter detail table to '+g.label+' (click again to clear)';
-    tr.addEventListener('click',()=>{
-      wpCategoryFilter = wpCategoryFilter===g.label ? null : g.label;
-      renderWpBenchmark();
-    });
-    tr.addEventListener('mouseenter',()=>{ if(!isActive) tr.style.filter='brightness(.96)'; });
-    tr.addEventListener('mouseleave',()=>{ tr.style.filter=''; });
+  // Check if a row exceeds tolerance for a specific COGS group
+  const exceedsTol=(r,grp)=>{
+    const bench=getBench(r);
+    const bmVal=bench[grp];
+    if(!bmVal) return false;
+    const wp=(parseFloat(r['Project Size (kW)'])||0)*1000;
+    if(wp<=0) return false;
+    const total=WP_GROUPS[grp].reduce((s,c)=>s+(Number(r[c])||0),0);
+    const actual=total/wp;
+    const changePct=(actual-bmVal)/bmVal;
+    return changePct>WP_TOLERANCE[grp];
+  };
 
-    // Filter indicator icon
-    const filterIcon=isActive?'<span style="font-size:9px;margin-left:5px;background:'+g.badge+';color:'+g.badgeCl+';padding:1px 6px;border-radius:99px;border:1px solid '+g.badgeBrd+'">● filtered</span>':'';
+  // Classify rows
+  const nonFlash=rows.filter(r=>_classifyRow(r)==='NON Flash IDS');
+  const flash=rows.filter(r=>_classifyRow(r)==='Flash IDS');
+  const blank=rows.filter(r=>_classifyRow(r)==='Blank IDS');
 
-    tr.innerHTML=
-      '<td style="padding:6px 12px;font-weight:700;color:#334155;border:1px solid #e2e8f0;text-align:center">'+(i+1)+'</td>'
-      +'<td style="padding:6px 12px;font-weight:700;color:'+g.cl+';border:1px solid #e2e8f0">'+g.label+filterIcon+'</td>'
-      +'<td style="padding:6px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+ids.toLocaleString()+'</td>'
-      +'<td style="padding:6px 12px;text-align:right;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+fmtKw(kw)+'</td>'
-      +'<td style="padding:6px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(rev)+'</td>'
-      +'<td style="padding:6px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(cogs)+'</td>'
-      +'<td style="padding:6px 12px;text-align:center;border:1px solid #e2e8f0">'+gmPill+'</td>';
-    body.appendChild(tr);
+  // For Flash IDS sub-rows: projects where each group exceeded tolerance
+  // (a single project may appear in multiple sub-rows)
+  const flashSubs=['Module','Inverter','MMS','Cable'].map(grp=>{
+    const tolPct=(WP_TOLERANCE[grp]*100).toFixed(0);
+    const label= grp==='Module'  ? 'Module — >'     +tolPct+'% Delta from PM'
+               : grp==='Inverter'? 'Inverter — >'   +tolPct+'% Delta from PM'
+               : grp==='MMS'     ? 'MMS — >'        +tolPct+'% Delta from PM'
+               :                   'Cable — >'      +tolPct+'% Delta from PM';
+    const sub=flash.filter(r=>exceedsTol(r,grp));
+    return {grp,label,...aggStats(sub)};
   });
 
-  // Total row
-  const totalGm=totalRev>0?((totalRev-totalCogs)/totalRev):null;
-  const totalGmPill=totalGm===null
-    ?'<span style="color:#94a3b8">—</span>'
-    :'<span style="font-weight:800;font-size:11.5px;color:'+(totalGm>=0.38?'#15803d':'#dc2626')
-      +';background:'+(totalGm>=0.38?'#d1fae5':'#fee2e2')
-      +';padding:2px 10px;border-radius:99px;display:inline-block;border:1px solid '+(totalGm>=0.38?'#86efac':'#fca5a5')+'">'+((totalGm*100).toFixed(1))+'%</span>';
+  // For NON Flash IDS sub-rows: NON Flash projects where that COGS group exceeded tolerance
+  // (high component cost but overall GM% still ≥38%)
+  const nonFlashSubs=WP_GROUP_NAMES.map(grp=>{
+    const tolPct=(WP_TOLERANCE[grp]*100).toFixed(0);
+    const sub=nonFlash.filter(r=>exceedsTol(r,grp));
+    return {grp,label:grp+' — >'+tolPct+'% Delta from PM',...aggStats(sub)};
+  });
 
+  // For Blank IDS sub-rows: which COGS group is ₹0
+  const blankSubs=WP_GROUP_NAMES.map(grp=>{
+    const sub=blank.filter(r=>WP_GROUPS[grp].reduce((s,c)=>s+(Number(r[c])||0),0)===0);
+    return {grp,label:grp+' = ₹0',...aggStats(sub)};
+  }).filter(s=>s.ids>0);
+
+  body.innerHTML='';
+  let totalIds=0,totalKw=0,totalRev=0,totalCogs=0;
+
+  // Helper: render a main category row + its sub-rows
+  const renderGroup=(sr,label,stats,color,bg,badge,badgeCl,badgeBrd,subRows,subType)=>{
+    totalIds+=stats.ids; totalKw+=stats.kw; totalRev+=stats.rev; totalCogs+=stats.cogs;
+    const isActive=wpCategoryFilter===label;
+    const expandId='wps-exp-'+sr;
+    let expanded=false;
+
+    // ── Main row ──
+    const tr=document.createElement('tr');
+    tr.style.cssText='background:'+bg+';cursor:pointer;transition:background .12s';
+    if(isActive) tr.style.outline='2px solid '+color+';outline-offset:-2px';
+    tr.title='Click to filter · ▶ expand for breakdown';
+
+    const filterBadge=isActive
+      ?'<span style="font-size:9px;margin-left:6px;background:'+badge+';color:'+badgeCl+';padding:1px 6px;border-radius:99px;border:1px solid '+badgeBrd+'">● filtered</span>':'';
+
+    tr.innerHTML=
+      '<td style="padding:5px 10px;font-weight:700;color:#334155;border:1px solid #e2e8f0;text-align:center;width:36px">'+sr+'</td>'
+      +'<td style="padding:5px 12px;font-weight:700;color:'+color+';border:1px solid #e2e8f0;min-width:220px">'
+        +'<span id="'+expandId+'-icon" style="display:inline-block;font-size:10px;margin-right:6px;transition:transform .2s;color:#94a3b8">▶</span>'
+        +label+filterBadge
+      +'</td>'
+      +'<td style="padding:5px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+stats.ids.toLocaleString()+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#334155;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums">'+fmtKw(stats.kw)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(stats.rev)+'</td>'
+      +'<td style="padding:5px 12px;text-align:right;color:#1e40af;border:1px solid #e2e8f0;font-variant-numeric:tabular-nums;font-weight:600">'+fmt(stats.cogs)+'</td>'
+      +'<td style="padding:5px 12px;text-align:center;border:1px solid #e2e8f0">'+gmPillHtml(stats.gm,badgeCl,badge,badgeBrd)+'</td>';
+
+    // Build sub-rows (hidden initially)
+    const subTrs=[];
+    subRows.forEach(s=>{
+      const str=document.createElement('tr');
+      str.className='wps-sub';
+      str.style.cssText='display:none;background:'+bg+';opacity:.9';
+
+      let subCells='';
+      if(subType==='flash'){
+        const subGm=s.rev>0?(s.rev-s.cogs)/s.rev:null;
+        subCells=
+          '<td style="padding:4px 10px;border:1px solid #f3e8e8;text-align:center;width:36px"><span style="color:#cbd5e1;font-size:9px">└</span></td>'
+          +'<td style="padding:4px 12px 4px 22px;color:#92400e;font-size:11px;border:1px solid #f3e8e8;font-style:italic">'+s.label+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #f3e8e8;font-variant-numeric:tabular-nums">'+s.ids.toLocaleString()+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #f3e8e8;font-variant-numeric:tabular-nums">'+fmtKw(s.kw)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #f3e8e8;font-variant-numeric:tabular-nums">'+fmt(s.rev)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #f3e8e8;font-variant-numeric:tabular-nums">'+fmt(s.cogs)+'</td>'
+          +'<td style="padding:4px 12px;text-align:center;border:1px solid #f3e8e8">'+gmPillHtml(subGm,'#b45309','#fef3c7','#fcd34d')+'</td>';
+      } else if(subType==='nonflash'){
+        const subGm=s.rev>0?(s.rev-s.cogs)/s.rev:null;
+        subCells=
+          '<td style="padding:4px 10px;border:1px solid #e7f5ec;text-align:center;width:36px"><span style="color:#cbd5e1;font-size:9px">└</span></td>'
+          +'<td style="padding:4px 12px 4px 22px;color:#166534;font-size:11px;border:1px solid #e7f5ec;font-style:italic">'+s.label+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #e7f5ec;font-variant-numeric:tabular-nums">'+s.ids.toLocaleString()+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #e7f5ec;font-variant-numeric:tabular-nums">'+fmtKw(s.kw)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #e7f5ec;font-variant-numeric:tabular-nums">'+fmt(s.rev)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #e7f5ec;font-variant-numeric:tabular-nums">'+fmt(s.cogs)+'</td>'
+          +'<td style="padding:4px 12px;text-align:center;border:1px solid #e7f5ec">'+gmPillHtml(subGm,'#15803d','#d1fae5','#86efac')+'</td>';
+      } else { // blank
+        const subGm=s.rev>0?(s.rev-s.cogs)/s.rev:null;
+        subCells=
+          '<td style="padding:4px 10px;border:1px solid #f0ede9;text-align:center;width:36px"><span style="color:#cbd5e1;font-size:9px">└</span></td>'
+          +'<td style="padding:4px 12px 4px 22px;color:#78716c;font-size:11px;border:1px solid #f0ede9;font-style:italic">'+s.label+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #f0ede9;font-variant-numeric:tabular-nums">'+s.ids.toLocaleString()+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#64748b;font-size:11px;border:1px solid #f0ede9;font-variant-numeric:tabular-nums">'+fmtKw(s.kw)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #f0ede9;font-variant-numeric:tabular-nums">'+fmt(s.rev)+'</td>'
+          +'<td style="padding:4px 12px;text-align:right;color:#3b82f6;font-size:11px;border:1px solid #f0ede9;font-variant-numeric:tabular-nums">'+fmt(s.cogs)+'</td>'
+          +'<td style="padding:4px 12px;text-align:center;border:1px solid #f0ede9">'+gmPillHtml(subGm,'#78716c','#f5f5f4','#d6d3d1')+'</td>';
+      }
+      str.innerHTML=subCells;
+      subTrs.push(str);
+    });
+
+    // Click: toggle expand (left half) or set filter (right half)
+    tr.addEventListener('click',(e)=>{
+      // Check if click was on the expand icon area (first two cells)
+      const cellIdx=[...tr.cells].findIndex(td=>td.contains(e.target));
+      if(cellIdx<=1){
+        // Toggle expand
+        expanded=!expanded;
+        const icon=document.getElementById(expandId+'-icon');
+        if(icon) icon.style.transform=expanded?'rotate(90deg)':'rotate(0deg)';
+        subTrs.forEach(s=>{ s.style.display=expanded?'table-row':'none'; });
+      } else {
+        // Filter
+        wpCategoryFilter = wpCategoryFilter===label ? null : label;
+        renderWpBenchmark();
+      }
+    });
+    tr.addEventListener('mouseenter',()=>{ if(!isActive) tr.style.filter='brightness(.97)'; });
+    tr.addEventListener('mouseleave',()=>{ tr.style.filter=''; });
+
+    body.appendChild(tr);
+    subTrs.forEach(s=>body.appendChild(s));
+  };
+
+  // ── NON Flash IDS ──
+  renderGroup(1,'NON Flash IDS',aggStats(nonFlash),
+    '#15803d','#f0fdf4','#d1fae5','#15803d','#86efac',
+    nonFlashSubs,'nonflash');
+
+  // ── Flash IDS ──
+  renderGroup(2,'Flash IDS',aggStats(flash),
+    '#dc2626','#fff8f8','#fee2e2','#dc2626','#fca5a5',
+    flashSubs,'flash');
+
+  // ── Blank IDS ──
+  renderGroup(3,'Blank IDS',aggStats(blank),
+    '#78716c','#fafaf9','#f5f5f4','#78716c','#d6d3d1',
+    blankSubs,'blank');
+
+  // ── Total row ──
+  const totalGm=totalRev>0?(totalRev-totalCogs)/totalRev:null;
   const trTotal=document.createElement('tr');
-  trTotal.style.cssText='background:linear-gradient(90deg,#f8fafc,#eef2ff);border-top:2px solid #c7d2fe'+(wpCategoryFilter?';opacity:.6':'');
+  trTotal.style.cssText='background:linear-gradient(90deg,#f8fafc,#eef2ff);border-top:2px solid #c7d2fe'+(wpCategoryFilter?';opacity:.7':'');
   trTotal.title=wpCategoryFilter?'Click to clear category filter':'All projects';
   if(wpCategoryFilter) trTotal.style.cursor='pointer';
   trTotal.addEventListener('click',()=>{ if(wpCategoryFilter){wpCategoryFilter=null;renderWpBenchmark();} });
   trTotal.innerHTML=
-    '<td style="padding:7px 12px;font-weight:800;color:#334155;border:1px solid #c7d2fe;text-align:center">—</td>'
+    '<td style="padding:7px 10px;font-weight:800;color:#334155;border:1px solid #c7d2fe;text-align:center">—</td>'
     +'<td style="padding:7px 12px;font-weight:800;letter-spacing:.03em;color:#3730a3;border:1px solid #c7d2fe">TOTAL'+(wpCategoryFilter?' <span style="font-size:9px;font-weight:500;color:#6366f1">(click to clear filter)</span>':'')+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+totalIds.toLocaleString()+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:700;color:#334155;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmtKw(totalKw)+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#1e40af;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmt(totalRev)+'</td>'
     +'<td style="padding:7px 12px;text-align:right;font-weight:800;color:#1e40af;border:1px solid #c7d2fe;font-variant-numeric:tabular-nums">'+fmt(totalCogs)+'</td>'
-    +'<td style="padding:7px 12px;text-align:center;border:1px solid #c7d2fe">'+totalGmPill+'</td>';
+    +'<td style="padding:7px 12px;text-align:center;border:1px solid #c7d2fe">'+gmPillHtml(totalGm)+'</td>';
   body.appendChild(trTotal);
 }
 
